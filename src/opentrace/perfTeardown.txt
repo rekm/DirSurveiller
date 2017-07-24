@@ -1,0 +1,117 @@
+Commandstyle approach from torvald
+
+
+Trace starts and constructs a trace struct
+
+trace_run(&trace, argc,argv) is issued 
+
+    trace struct contains *evlist   (util/evlist)
+    
+    syscalls are specially prepared in 
+        perf_evlist__add_vfs_getname
+
+    perf_evlist__config
+    perf_evsel__config_callchain
+
+    if identifier is used:
+        perf_evlist__set_sample_bit 
+        perf_evlist__reset_sample_bit
+
+    forks 
+        perf_evlist__prepare_workload(evlist, &trace->opts.target,
+                        argv, false, NULL)
+    
+__________________perfperf_evlist__prepare_workload_________________
+
+evlist
+
+    gets evlist , target, argv , dopipeoutput,
+    void (*exec_error) (int signo, siginfo_t *info, void *ucontext))
+
+    evlist contains a workload stuct    
+
+    2 pipes 
+    child_ready_pipe , go_pipe
+    
+    tries to create them
+
+    sets workload pid in evlist and forks
+
+    using pipes to send signals between parent and child processes
+    |
+    | ------------------------------------------------------|
+                                                | child            
+    check execerror   
+    thread_map__set_pid                         | var ret int
+    close childready pipe[1]                    | dup2(2,1)
+    and go_pipe[0]                              | signal(SIGTERM,SIG_DFL)
+    wait for child                              | close(child_ready_pipe[0])
+    by checking if read chlild_ready[0] == err  | close(go_pipe[1])
+                                                | signal ready by calling
+                                                | close(child_ready_pipe[1])
+    setting go_pipe[1] CLOEXEC                  | 
+    go_pipe[1] is cork_fd in workload           | wait for parent
+    close child_ready_pipe[1]                   | reads goPipe[0] as byte
+    exit                                        | canceling is done by the parent 
+                                                | calling cork_fd             
+                                                | run execvp
+                                                    handle error
+
+start_workload
+    just writes 0 char to workload cork_fd
+    previously known as go_pipe[1] 
+    ad closes it
+                                         
+     
+
+
+Important bit between 2330 and 2377
+
+
+exit via the interrupted flag
+
+
+variables: 
+    before - initially set to number of events traced
+    done - ?
+    drainig - init false 
+    
+Functions called 
+
+
+thread_map__pid(evlist->threads, 0) == -1 (outside)
+perf_evlist__first(evlist)->attr.inherit
+
+While (cycling traced events) loop:
+    perf_evlist__mmap_read
+    perf_evlist__parse_sample
+    trace__handle_event
+
+next event:
+    here interuppted may trigger escape from while
+    perf_evlist__mmap_consume
+    perf_evlist__disable
+
+
+if #events == before 
+    perf_evlist__poll
+    perf_evlist__filter_pollfd
+
+-----------------------------------------------------------
+
+trace__handle_event
+    gets trace, perf_event, perf_sample
+
+    trace__process_event:
+        gets trace, machine, perf_event list, perf sample
+        
+        switch {header type}
+        case  PERF_RECORD_LOST
+            output what was lost
+            return machine__process_lost_event()
+        else    machine__process_event()   (util/machine)
+            
+
+    perf_evlist__id2evsel
+
+    tracepoint_handler
