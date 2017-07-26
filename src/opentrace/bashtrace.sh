@@ -241,7 +241,7 @@ cat -v trace_pipe | $awk -v o=$offset -v kname=$kname '
 		time = $(3+o); sub(":", "", time)
 		printf "%-16s ", time
 		#}
-		printf "%6s %6d %s\n", pid, getppid[pid], args >> "/dev/stderr"
+		printf "%-16.16s %6s %6d %s\n", comm, pid, getppid[pid], args >> "/dev/stderr"
 		#if (!opt_duration)
 		fflush()
 		#if (!opt_reexec) {
