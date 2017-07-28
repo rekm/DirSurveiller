@@ -50,5 +50,5 @@ struct thread_map *new_thread_map(pid_t pid){
        zfree(&namelist[i]);
     free(namelist);
     return threads;
-}   
+}
 
