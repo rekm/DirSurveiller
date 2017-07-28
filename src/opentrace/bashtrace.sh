@@ -162,15 +162,23 @@ warn "echo > trace"
 
 cat -v trace_pipe | $awk -v o=$offset -v kname=$kname '
     #common fields
-    $1 != "#" {
-        # task name can contain dashes and numbers
-        split($0, line, "-")
-        sub(/^[ \t\r\n]+/, "", line[1])
-        comm = line[1]
-        sub(/ .*$/, "", line[2])
-        opid = line[2]
-        pid = line[2]
-    }
+    #$1 != "#" {
+    #    # task name can contain dashes and numbers
+    #    split($0, line, "-")
+    #    sub(/^[ \t\r\n]+/, "", line[1])
+    #    comm = line[1]
+    #    sub(/ .*$/, "", line[2])
+    #    opid = line[2]
+    #    pid = line[2]
+    #}
+
+	$1 != "#" {
+		# task name can contain dashes
+		comm = pid = $1
+		sub(/-[0-9][0-9]*/, "", comm)
+		sub(/.*-/, "", pid)
+        opid = pid
+	}
 
 	# do_sys_open()
 	$1 != "#" && $(5+o) ~ /do_sys_open/ {
