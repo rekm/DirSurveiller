@@ -21,28 +21,28 @@ int primeCommandToExecute(
         procController *controller, int argc, const char **argv,
         void (*exec_error)(int signo, siginfo_t *info, void *ucontext));
 
-int main(int argc, char **argv)
-{    
+int main(int argc, char *argv[])
+{
     int ret=0;
     int err=1;
     if (argc<2){
         printf("Wrong Input: Need at least one argument! \n");
         goto out;
     }
-    procController pControl = { 
+    procController pControl = {
         .triggerPipe = -1,
         .pid = -1
     };
 
     fprintf(stderr ,"This still works \n");
-     
+
     ret = primeCommandToExecute( &pControl, argc-1, argv+1, NULL);
     if (ret < 0){
         fprintf(stderr, "Priming of execute command failed\n");
         goto close_triggerPipe;
     }
-    
-    /* Build request body for perf_event_open 
+
+    /* Build request body for perf_event_open
      *
      * Note: On my machine open syscalls are trace
      *  0x1F1 -> 497 */
@@ -51,24 +51,24 @@ int main(int argc, char **argv)
 
     /*goto close_triggerPipe;*/
     ret = runCommand( &pControl);
-    
+
     /* Deal with perf events */
-        
+
     return 0;
 
 close_triggerPipe:
     close(pControl.triggerPipe);
 out:
-     return err; 
+     return err;
 }
 
-/*  Function that primes the user given command for execution and 
+/*  Function that primes the user given command for execution and
  *  stops just before executing it.
- *  
- *  It provides a way to signal failure of an execv command 
+ *
+ *  It provides a way to signal failure of an execv command
  *  by utilizing a nonparameter in the function definition.
- *  
- *  Pipes are used for parent child communication. 
+ *
+ *  Pipes are used for parent child communication.
  *
  *  ListEntry: 0 recieve and 1 send*/
 
@@ -76,14 +76,14 @@ int primeCommandToExecute(
         procController *controller, int argc, const char **argv,
         void (*exec_error)(int signo, siginfo_t *info, void *ucontext)){
     int subcommand_ready2execPipe[2], startSignalPipe[2];
-    
+
     char *args [argc+1];
     memcpy(args, argv, argc *sizeof(char*));
     args[argc] = NULL;
-    
-    
-    char pmsg; 
-    /*Creating pipes*/    
+
+
+    char pmsg;
+    /*Creating pipes*/
     if (pipe(subcommand_ready2execPipe) < 0){
         fprintf(stderr, "Could not open pipe\n");
         return -1;
@@ -98,7 +98,7 @@ int primeCommandToExecute(
         fprintf(stderr,"Fork failed\n");
         goto close_pipes;
     }
-
+    fprintf(stderr, "Child ID: %d", controller->pid);
     if (!controller->pid){
      /* making a copy of sysout*/
         int ret;
@@ -106,9 +106,9 @@ int primeCommandToExecute(
         ssignal(SIGTERM, SIG_DFL);
         close(subcommand_ready2execPipe[0]);
         close(startSignalPipe[1]);
-        
-        fcntl(startSignalPipe[0], F_SETFD, FD_CLOEXEC);       
-        
+
+        fcntl(startSignalPipe[0], F_SETFD, FD_CLOEXEC);
+
         /* Closing the send ready pipeline signals readyness*/
         close(subcommand_ready2execPipe[1]);
         ret = read(startSignalPipe[0], &pmsg, 1);
@@ -119,9 +119,9 @@ int primeCommandToExecute(
             }
             exit(ret);
         }
-        
+
         execvp(args[0], (char**)args);
-        if (exec_error) { 
+        if (exec_error) {
             union sigval val;
             val.sival_int = errno;
             if (sigqueue(getppid(), SIGUSR1, val))
@@ -143,17 +143,17 @@ int primeCommandToExecute(
     close(subcommand_ready2execPipe[1]);
     close(startSignalPipe[0]);
     /* Check if commad executer is ready */
-    
+
     if (read(subcommand_ready2execPipe[0],&pmsg,1) == -1){
         fprintf(stderr,
                 "Read of pipe failed: Can not determine executer state\n");
         goto close_pipes;
     }
-    
+
     /*Setting up trigger in control*/
     fcntl(startSignalPipe[1], F_SETFD, FD_CLOEXEC);
     controller->triggerPipe = startSignalPipe[1];
-    
+
     close(subcommand_ready2execPipe[0]);
     return 0;
 
@@ -164,8 +164,8 @@ close_pipes:
 close_ready2exec:
     close(subcommand_ready2execPipe[0]);
     close(subcommand_ready2execPipe[1]);
-    
-    return -1;   
+
+    return -1;
 }
 
 int runCommand(procController *controller){
@@ -179,10 +179,6 @@ int runCommand(procController *controller){
         close(controller->triggerPipe);
         return ret;
     }
-    return 0; 
+    return 0;
 }
 
-struct thread_map *create_thread_map(pid_t pid){
-
-    
-}

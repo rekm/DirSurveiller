@@ -41,7 +41,7 @@ function warn {
 function end {
 	# disable tracing
 	echo 2>/dev/null
-	echo "Ending tracing..." 2>/dev/null
+	#echo "Ending tracing..." 2>/dev/null
 	cd $tracing
 	warn "echo 0 > events/kprobes/$kname/enable"
 	warn "echo 0 > events/kprobes/getnameprobe/enable"
@@ -144,7 +144,7 @@ fi
 if ! echo 1 > events/sched/sched_process_fork/enable; then
 	edie "ERROR: enabling sched:sched_process_fork tracepoint. Exiting."
 fi
-echo "Instrumenting $func"
+#echo "Instrumenting $func"
 
 #
 # Determine output format. It may be one of the following (newest first):
@@ -204,11 +204,11 @@ cat -v trace_pipe | $awk -v o=$offset -v kname=$kname '
 		if (rval ~ /0xfffff/)
 			rval = -1
 
-		if (opt_time) {
-			time = $(3+o); sub(":", "", time)
-			printf "%-16s ", time
-		}
-		printf "%-16.16s %-6s %4s %s\n", comm, opid, rval, filename
+		#if (opt_time) {
+		time = $(3+o); sub(":", "", time)
+		printf "%-16s ", time
+		#}
+		printf "%-16.16s\t%-6s\t%4s\t%s\n", comm, opid, rval, filename >> "/dev/stdout"
 	}
     #execve output
 
@@ -249,7 +249,7 @@ cat -v trace_pipe | $awk -v o=$offset -v kname=$kname '
 		time = $(3+o); sub(":", "", time)
 		printf "%-16s ", time
 		#}
-		printf "%-16.16s %6s %6d %s\n", comm, pid, getppid[pid], args >> "/dev/stderr"
+		printf "%-16.16s\t%6s\t%6s\t%6d\t%s\n", time, comm, pid, getppid[pid], args >> "/dev/stderr"
 		#if (!opt_duration)
 		fflush()
 		#if (!opt_reexec) {
