@@ -1,10 +1,10 @@
 #ifndef _OPENTRACE_H
 #define _OPENTRACE_H
 
-#include <sys/types.h> 
+#include <sys/types.h>
 
 
-typedef struct{ 
+typedef struct{
     int triggerPipe;
     int pid;
 } procController;

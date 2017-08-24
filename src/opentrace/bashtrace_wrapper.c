@@ -191,14 +191,14 @@ int primeCommandToExecute(
             }
             exit(ret);
         }
-        current_mask = umask(0111);
+        //current_mask = umask(0111);
         if(( open_connection = accept( fd_open,NULL,NULL)) == -1) exit(-1);
         if(( exec_connection = accept( fd_exec,NULL,NULL)) == -1) exit(-1);
         dup2( open_connection, STDOUT_FILENO);
         dup2( exec_connection, STDERR_FILENO);
         close(open_connection);
         close(exec_connection);
-        umask(current_mask);
+        //umask(current_mask);
         execvp(args[0], (char**)args);
         close(fd_exec);
         close(fd_open);
