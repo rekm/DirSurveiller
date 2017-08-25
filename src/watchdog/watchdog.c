@@ -2,17 +2,53 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include "watchdog.h"
 
 
 
 
-/**
- * A function handling incomming execute commads
- * i.e reading constructing process objects and handling
- * double PIDs.
- */
+
+// Char ringbuffer implementation
+
+void char_ringBuffer_init(char_ringBuffer* rb){
+    rb->read = 0;
+    rb->write = 0;
+    memset(rb->buffer,0,SIZE_RING);
+}
+
+int char_ringBuffer_write(char_ringBuffer* rb,const char cont){
+    int ret = char_ringBuffer_full(rb);
+    if(!ret)
+        rb->buffer[char_ringBuffer_mask(rb->write++)]=cont;
+    return ret;
+}
+
+char char_ringBuffer_read(char_ringBuffer* rb){
+    int ret = char_ringBuffer_empty(rb);
+    if(!ret)
+      return rb->buffer[char_ringBuffer_mask(rb->read++)];  
+    return 0;
+}
+
+u_int32_t char_ringBuffer_mask(u_int32_t val){
+   return val & (SIZE_RING - 1); 
+}
+
+int char_ringBuffer_empty(char_ringBuffer* rb){
+    return rb->read==rb->write;
+}
+
+int char_ringBuffer_full(char_ringBuffer* rb){
+    return char_ringBuffer_size(rb) == SIZE_RING;
+}
+
+u_int32_t char_ringBuffer_size(char_ringBuffer* rb){
+    return rb->write - rb->read;
+}
 
 
+// general ringbuffer implementation
+int g_ringBuffer_init(g_ringBuffer* rb, size_t esize);
 /**
  * Handling of incomming opencalls and filtering of them
  */

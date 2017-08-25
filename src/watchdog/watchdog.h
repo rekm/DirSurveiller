@@ -16,6 +16,8 @@ typedef struct {
 int g_ringBuffer_init(g_ringBuffer* rb, size_t esize);
 int g_ringBuffer_write(g_ringBuffer* rb, void *content, size_t size);
 int g_ringBuffer_read(g_ringBuffer* rb, void *content, size_t size);
+int g_ringBuffer_size(g_ringBuffer* rb);
+int g_ringBuffer_empty(g_ringBuffer* rb);
 int g_ringBuffer_full(g_ringBuffer* rb);
 void g_ringBuffer_destroy(g_ringBuffer* rb);
 
@@ -26,10 +28,13 @@ typedef struct {
     char buffer[SIZE_RING];
 } char_ringBuffer;
 
-int char_ringBuffer_init(char_ringBuffer* rb);
-int char_ringBuffer_write(char_ringBuffer* rb, char *content, size_t len);
-int char_ringBuffer_read(char_ringBuffer* rb, char *content, size_t len);
+void char_ringBuffer_init(char_ringBuffer* rb);
+int char_ringBuffer_write(char_ringBuffer* rb, const char cont);
+char char_ringBuffer_read(char_ringBuffer* rb);
+u_int32_t char_ringBuffer_mask(u_int32_t val);
+u_int32_t char_ringBuffer_size(char_ringBuffer* rb);
 int char_ringBuffer_full(char_ringBuffer* rb);
+int char_ringBuffer_empty(char_ringBuffer* rb);
 void char_ringBuffer_destroy(char_ringBuffer* rb);
 
 /**
