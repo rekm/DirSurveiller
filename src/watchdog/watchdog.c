@@ -48,7 +48,18 @@ u_int32_t char_ringBuffer_size(char_ringBuffer* rb){
 
 
 // general ringbuffer implementation
-int g_ringBuffer_init(g_ringBuffer* rb, size_t esize);
+int g_ringBuffer_init(g_ringBuffer* rb, size_t esize){
+    rb->buffer = calloc(rb->buffer, esize*SIZE_RING);
+    if(!rb->buffer)
+        return 1;
+    rb->read = 0;
+    rb->write = 0;
+    return 0;
+}
+
+int g_ringBuffer_write(g_ringBuffer* rb 
+
+
 /**
  * Handling of incomming opencalls and filtering of them
  */
