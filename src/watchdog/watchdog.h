@@ -9,14 +9,15 @@
 typedef struct {
     u_int32_t read;
     u_int32_t write;
-    void* buffer;
+    void** buffer;
 } g_ringBuffer;
 
 
 int g_ringBuffer_init(g_ringBuffer* rb, size_t esize);
-int g_ringBuffer_write(g_ringBuffer* rb, void *content, size_t size);
-int g_ringBuffer_read(g_ringBuffer* rb, void *content, size_t size);
-int g_ringBuffer_size(g_ringBuffer* rb);
+int g_ringBuffer_write(g_ringBuffer* rb, void *content);
+int g_ringBuffer_read(g_ringBuffer* rb, void *content);
+u_int32_t g_ringBuffer_size(g_ringBuffer* rb);
+u_int32_t g_ringBuffer_mask(u_int32_t val);
 int g_ringBuffer_empty(g_ringBuffer* rb);
 int g_ringBuffer_full(g_ringBuffer* rb);
 void g_ringBuffer_destroy(g_ringBuffer* rb);
@@ -94,12 +95,12 @@ typedef struct {
 } surveiller;
 
 
-int wproc_init(surveiller*, const char* opencall_socketaddr,
+int surv_init(surveiller*, const char* opencall_socketaddr,
                const char* execcall_socketaddr);
 
-int wproc_check_running(surveiller* watchdog);
-int wproc_handleExecCallSocket(surveiller* watchdog);
-int wproc_handleOpenCallSocket(surveiller* watchdog);
-int wproc_construct_dispatchtrees(surveiller* watchdog);
-int wproc_dispatch(surveiller* watchdog);
+int surv_check_running(surveiller* watchdog);
+int surv_handleExecCallSocket(surveiller* watchdog);
+int surv_handleOpenCallSocket(surveiller* watchdog);
+int surv_construct_dispatchtrees(surveiller* watchdog);
+int surv_dispatch(surveiller* watchdog);
 #endif
