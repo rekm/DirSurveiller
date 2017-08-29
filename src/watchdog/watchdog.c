@@ -26,12 +26,12 @@ int char_ringBuffer_write(char_ringBuffer* rb,const char cont){
 char char_ringBuffer_read(char_ringBuffer* rb){
     int ret = char_ringBuffer_empty(rb);
     if(!ret)
-      return rb->buffer[char_ringBuffer_mask(rb->read++)];  
+      return rb->buffer[char_ringBuffer_mask(rb->read++)];
     return 0;
 }
 
 u_int32_t char_ringBuffer_mask(u_int32_t val){
-   return val & (SIZE_RING - 1); 
+   return val & (SIZE_RING - 1);
 }
 
 int char_ringBuffer_empty(char_ringBuffer* rb){
@@ -57,7 +57,7 @@ int g_ringBuffer_init(g_ringBuffer* rb, size_t esize){
     return 0;
 }
 
-int g_ringBuffer_write(g_ringBuffer* rb 
+int g_ringBuffer_write(g_ringBuffer* rb
 
 
 /**
