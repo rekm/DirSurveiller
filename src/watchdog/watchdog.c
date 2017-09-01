@@ -2,10 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include "watchdog.h"
 
 
-
+#define zfree(ptr) ({ free(*ptr); *ptr = NULL; })
 
 
 // Char ringbuffer implementation
@@ -60,7 +62,7 @@ int g_ringBuffer_init(g_ringBuffer* rb, size_t esize){
 int g_ringBuffer_write(g_ringBuffer* rb, void* content){
     int ret = g_ringBuffer_full(rb);
     if(!ret)
-        rb->buffer[g_ringBuffer_mask(rb->write++)] = &content; 
+        rb->buffer[g_ringBuffer_mask(rb->write++)] = &content;
     return ret;
 }
 
@@ -69,7 +71,7 @@ int g_ringBuffer_read(g_ringBuffer* rb, void* content){
     if(!ret)
        content = rb->buffer[g_ringBuffer_mask(rb->read++)];
     return ret;
-} 
+}
 
 u_int32_t g_ringBuffer_mask(u_int32_t val){
     return val & (SIZE_RING -1);
@@ -89,20 +91,64 @@ void g_ringBuffer_destroy(g_ringBuffer* rb){
         void* value = NULL;
         if(g_ringBuffer_read(rb, value))
             break;
-        zfree(value);
+        zfree(&value);
     }
     zfree(&rb->buffer);
-    zfree(rb);
-}    
+    zfree(&rb);
+}
 /**
  * Handling of incomming opencalls and filtering of them
  */
-int opencall_handler(void* surv_struct){
+int surv_handleOpenCallSocket(void* surv_struct){
+    int ret = 0;
+    char buf[256];
+    int bufpos = 0;
+    int rc;
+    ssize_t rlen;
+    struct sockaddr_un addr;
+
+    surveiller* surv = (surveiller*) surv_struct;
+    if ( (rc = socket(AF_UNIX, SOCK_STREAM, 0)) == -1){
+        ret = 2;
+        goto endfun;
+    }
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    if(*surv->opencall_socketaddr == '\0'){
+        *addr.sun_path = '\0';
+        strncpy( addr.sun_path + 1,
+                surv->opencall_socketaddr + 1, sizeof(addr.sun_path) - 2);
+     } else {
+        strncpy(addr.sun_path,
+                surv->opencall_socketaddr, sizeof(addr.sun_path) -1);
+     }
+     if (connect( rc, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
+         ret = 3;
+         goto endfun;
+     }
+     while( (rlen = recv(rc, buf+bufpos,
+                         sizeof(buf)-sizeof(char)*bufpos, 0)) != -1){
+        printf( "%s\n", buf);
+        for (int i=0; i<=bufpos+rlen; i++){
+
+        }
+     }
+
+
+endfun:
+    return ret;
+}
+
+
+/**
+ * Handler for incomming execcalls
+ */
+
+int surv_handleExecCallSocket(void* surv_struct){
     int ret = 0;
     surveiller* surv = (surveiller*) surv_struct;
     return ret;
-}      
-
+}
 
 /**
  * Gets max pid from proc pseudo filesystem under linux

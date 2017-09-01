@@ -25,7 +25,6 @@ typedef struct{
     int gpid;
 } procController;
 
-
 int runCommand(procController *controller);
 int primeCommandToExecute(
         procController *controller, int argc, char **argv,
@@ -124,7 +123,9 @@ int primeCommandToExecute(
         char *execcall_socket_path = "/tmp/opentrace_execcalls";
         struct sockaddr_un open_addr;
         struct sockaddr_un exec_addr;
+        struct timeval timeout;
         int fd_open, fd_exec;
+        fd_set fds;
         if (( fd_open = socket(AF_UNIX, SOCK_STREAM,0)) == -1) {
             perror("Can't create socket");
             exit(-1);
@@ -147,13 +148,13 @@ int primeCommandToExecute(
         unlink(execcall_socket_path);
         //binding of sockets
 
-        /*int reuse = 1;
+        int reuse = 1;
         if(setsockopt(fd_open, SOL_SOCKET, SO_REUSEADDR,
                        &reuse, sizeof(reuse))){
             fprintf(stderr, "Reuse failed with code %i\n",errno);
             exit(-1);
         }
-        */
+
         mode_t current_mask = umask((mode_t) 0111);
         if (bind(fd_open, (struct sockaddr*)&open_addr,
                  sizeof(open_addr)) == -1) {
@@ -191,14 +192,21 @@ int primeCommandToExecute(
             }
             exit(ret);
         }
-        //current_mask = umask(0111);
-        if(( open_connection = accept( fd_open,NULL,NULL)) == -1) exit(-1);
-        if(( exec_connection = accept( fd_exec,NULL,NULL)) == -1) exit(-1);
+        //Set timeout
+        timeout.tv_sec = 5;
+        timeout.tv_usec = 500000;
+        //clear fd_set
+        FD_ZERO(&fds);
+        //Add sockets to set
+        FD_SET(fd_open, &fds);
+        FD_SET(fd_exec, &fds);
+//        if(( open_connection = accept( fd_open,NULL,NULL)) == -1) exit(-1);
+//        if(( exec_connection = accept( fd_exec,NULL,NULL)) == -1) exit(-1);
+        ret = select(fd_exec+1, &fds, NULL, NULL, &timeout);
         dup2( open_connection, STDOUT_FILENO);
         dup2( exec_connection, STDERR_FILENO);
         close(open_connection);
         close(exec_connection);
-        //umask(current_mask);
         execvp(args[0], (char**)args);
         close(fd_exec);
         close(fd_open);

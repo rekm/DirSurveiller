@@ -99,8 +99,8 @@ int surv_init(surveiller*, const char* opencall_socketaddr,
                const char* execcall_socketaddr);
 
 int surv_check_running(surveiller* watchdog);
-int surv_handleExecCallSocket(surveiller* watchdog);
-int surv_handleOpenCallSocket(surveiller* watchdog);
+int surv_handleExecCallSocket(void* surv_struct);
+int surv_handleOpenCallSocket(void* surv_struct);
 int surv_construct_dispatchtrees(surveiller* watchdog);
 int surv_dispatch(surveiller* watchdog);
 #endif
