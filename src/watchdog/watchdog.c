@@ -10,6 +10,54 @@
 #define zfree(ptr) ({ free(*ptr); *ptr = NULL; })
 
 
+// StringBuffer implementation
+
+
+int sb_init(stringBuffer* this, size_t size){
+    this->string = malloc(sizeof(char)*size);
+    if (!this->string | !size)
+        return 1;
+    this->size = size;
+    this->pos = 0;
+    this->string[0] = '\0';
+    return 0;
+}
+
+int sb_appendl(stringBuffer* this, char* string, size_t len){
+    while (this->pos+len >= this->size){
+        char *ret = realloc(this->string,sizeof(char)*this->size*2);
+        if(!ret) return 1;
+        this->size = this->size*2;
+    }
+    memcpy(this->string+this->pos, string, len);
+    this->pos+=len;
+    return 0;
+}
+
+int sb_append(stringBuffer* this, char* string){
+    size_t len = strlen(string);
+    while (this->pos+len >= this->size){
+        char *ret = realloc(this->string,sizeof(char)*this->size*2);
+        if(!ret) return 1;
+        this->size = this->size*2;
+    }
+    memcpy(this->string+this->pos, string, len+1);
+    this->pos+=len;
+    return 0;
+}
+
+void sb_deletehead(stringBuffer* this, size_t len){
+    if (len > this->pos) len = this->pos;
+    memmove(this->string, this->string+len, this->pos+1 - len);
+    this->pos -= len;
+}
+
+void sb_destroy(stringBuffer* this){
+    this->size = 0;
+    this->pos = 0;
+    zfree(&this->string);
+}
+ 
 // Char ringbuffer implementation
 
 void char_ringBuffer_init(char_ringBuffer* rb){
@@ -81,6 +129,10 @@ int g_ringBuffer_empty(g_ringBuffer* rb){
     return rb->read = rb->write;
 }
 
+int g_ringBuffer_full(g_ringBuffer* rb){
+    return g_ringBuffer_size(rb)==SIZE_RING;
+}
+
 u_int32_t g_ringBuffer_size(g_ringBuffer* rb){
     return rb->write - rb->read;
 }
@@ -94,7 +146,6 @@ void g_ringBuffer_destroy(g_ringBuffer* rb){
         zfree(&value);
     }
     zfree(&rb->buffer);
-    zfree(&rb);
 }
 /**
  * Handling of incomming opencalls and filtering of them
@@ -102,6 +153,7 @@ void g_ringBuffer_destroy(g_ringBuffer* rb){
 int surv_handleOpenCallSocket(void* surv_struct){
     int ret = 0;
     char buf[256];
+    stringBuffer* fields;
     int bufpos = 0;
     int rc;
     ssize_t rlen;
@@ -126,14 +178,27 @@ int surv_handleOpenCallSocket(void* surv_struct){
          ret = 3;
          goto endfun;
      }
+     /* Fields:
+      *     time 34 chars
+      *     command name 7
+      *     PID  5
+      *     Return Val 
+      *     filename unbounded 100
+      */
+     int field_num = 5;
+     fields = malloc(sizeof(stringBuffer*)*field_num);
+
+     
+     
      while( (rlen = recv(rc, buf+bufpos,
                          sizeof(buf)-sizeof(char)*bufpos, 0)) != -1){
         printf( "%s\n", buf);
         for (int i=0; i<=bufpos+rlen; i++){
-
+            
         }
      }
-
+     for (int ii=0; ii<field_num;ii++)
+        sb_destroy(fields+ii);   
 
 endfun:
     return ret;
@@ -179,6 +244,59 @@ endfun:
 
 
 
+int test(){
+    int ret = 0;
+    printf("Testing data structures defined in watchdog.h\n");
+    printf("Stringbuffer:\n\n init\n");
+    stringBuffer sb;
+    ret = sb_init(&sb, 16);
+    if(ret){
+        perror("Could not allocate memory\n");
+        goto freeStringBuffer;
+    }
+    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
+    printf( "Appending to Buffer\n");
+    ret = sb_append(&sb,"hello world ");
+    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
+    ret = sb_append(&sb,"hello world ");
+    ret = sb_append(&sb,"hello world ");
+    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
+    printf( "delete head\n");
+    sb_deletehead(&sb,5);
+    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
+    sb_append(&sb, "hello");
+    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
+    sb_deletehead(&sb, 40);
+    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
+    
+freeStringBuffer:       
+    sb_destroy(&sb);
+    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string); 
+    
+    int field_num = 5;
+    stringBuffer fields[field_num];
+    // fields = (stringBuffer*)malloc(sizeof(stringBuffer*)*field_num);
+    sb_init(fields,64); 
+    sb_append(fields,"hello world "); 
+    sb_init(&fields[1],16); 
+    sb_init(&fields[2],16);
+    sb_init(&fields[3],16);
+    sb_init(&fields[4],128);
+     
+    for (int ii=0; ii<field_num;ii++)
+        printf( "size:%zu pos:%i \nstring:%s\n\n",
+                fields[ii].size, fields[ii].pos, fields[ii].string);
+    
+    for (int iii=0; iii<field_num;iii++){
+        printf( "destroying %i\n",iii); 
+        sb_destroy(fields+iii);   
+    }
+    for (int ii=0; ii<field_num;ii++)
+        printf( "size:%zu pos:%i \nstring:%s\n\n",
+                fields[ii].size, fields[ii].pos, fields[ii].string);
+
+    exit(0);
+} 
 
 
 int main(void){
@@ -189,7 +307,8 @@ int main(void){
         fprintf(stderr, "Could not read /proc/sys/kernel/pid_max\n");
         exit(EXIT_FAILURE);
     }
-
     fprintf(stderr, "Max PID: %i\n",max_pid);
+    if (test()) 
+        exit(EXIT_FAILURE);
     exit(EXIT_SUCCESS);
 }

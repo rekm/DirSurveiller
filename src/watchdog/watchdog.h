@@ -3,7 +3,51 @@
 
 #include <sys/types.h>
 
-// Ringbuffer
+
+
+//################ Stringbuffer #############  
+
+typedef struct {
+    char* string;
+    size_t size;
+    u_int32_t pos;
+} stringBuffer;
+
+/**
+ * Initialize StringBuffer
+ * @size is the inital size of the buffer
+ * @returns 0, if successfull and 
+ *          1, if memory allocation fails
+ */  
+int sb_init(stringBuffer* this, size_t size);
+
+/**
+ * Append string to buffer specifying length
+ * @string String to append
+ * @len Length to copy over from string
+ */
+int sb_appendl(stringBuffer* this, char* string, size_t len);
+
+/**
+ * Append string to buffer
+ * @string
+ */
+
+int sb_append(stringBuffer* this, char* string);
+
+/**
+ * Delete first n (len) chars from Buffer and shift remaining section
+ * to start of memory
+ * @len chars to delete
+ */
+void sb_deletehead(stringBuffer* this, size_t len); 
+
+/**
+ * Destructor of StringBuffer
+ */
+void sb_destroy(stringBuffer* this);
+
+//########## Ringbuffer ###############
 #define SIZE_RING 1024
 
 typedef struct {
