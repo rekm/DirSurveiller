@@ -5,7 +5,7 @@
 
 
 
-//################ Stringbuffer #############  
+//################ Stringbuffer #############
 
 typedef struct {
     char* string;
@@ -16,9 +16,9 @@ typedef struct {
 /**
  * Initialize StringBuffer
  * @size is the inital size of the buffer
- * @returns 0, if successfull and 
+ * @returns 0, if successfull and
  *          1, if memory allocation fails
- */  
+ */
 int sb_init(stringBuffer* this, size_t size);
 
 /**
@@ -40,7 +40,7 @@ int sb_append(stringBuffer* this, char* string);
  * to start of memory
  * @len chars to delete
  */
-void sb_deletehead(stringBuffer* this, size_t len); 
+void sb_deletehead(stringBuffer* this, size_t len);
 
 /**
  * Destructor of StringBuffer

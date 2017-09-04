@@ -40,6 +40,7 @@ int sb_append(stringBuffer* this, char* string){
         char *ret = realloc(this->string,sizeof(char)*this->size*2);
         if(!ret) return 1;
         this->size = this->size*2;
+        this->string = ret;
     }
     memcpy(this->string+this->pos, string, len+1);
     this->pos+=len;
@@ -57,7 +58,7 @@ void sb_destroy(stringBuffer* this){
     this->pos = 0;
     zfree(&this->string);
 }
- 
+
 // Char ringbuffer implementation
 
 void char_ringBuffer_init(char_ringBuffer* rb){
@@ -153,12 +154,16 @@ void g_ringBuffer_destroy(g_ringBuffer* rb){
 int surv_handleOpenCallSocket(void* surv_struct){
     int ret = 0;
     char buf[256];
-    stringBuffer* fields;
+    stringBuffer sbuf;
+    int field_num = 5;
+    enum FieldDesc { OTime, Cmd, PID, Rval, Path} fieldname;
+    stringBuffer fields[field_num];
     int bufpos = 0;
     int rc;
     ssize_t rlen;
     struct sockaddr_un addr;
 
+    ret = sb_init(&sbuf, 512);
     surveiller* surv = (surveiller*) surv_struct;
     if ( (rc = socket(AF_UNIX, SOCK_STREAM, 0)) == -1){
         ret = 2;
@@ -182,23 +187,29 @@ int surv_handleOpenCallSocket(void* surv_struct){
       *     time 34 chars
       *     command name 7
       *     PID  5
-      *     Return Val 
+      *     Return Val
       *     filename unbounded 100
       */
-     int field_num = 5;
-     fields = malloc(sizeof(stringBuffer*)*field_num);
+    ret = (sb_init(&fields[OTime],64)
+         | sb_init(&fields[Cmd],32)
+         | sb_init(&fields[PID],16)
+         | sb_init(&fields[Rval],8)
+         | sb_init(&fields[Path],128) );
+    if(ret)
+        goto cleanupStringBuffers;
 
-     
-     
-     while( (rlen = recv(rc, buf+bufpos,
-                         sizeof(buf)-sizeof(char)*bufpos, 0)) != -1){
+
+
+     while( (rlen = recv(rc, buf, sizeof(buf), 0)) != -1){
         printf( "%s\n", buf);
-        for (int i=0; i<=bufpos+rlen; i++){
-            
+        sb_append(&sbuf, buf);
+        for (int i=0; i<=sbuf.pos; i++){
+
         }
      }
+cleanupStringBuffers:
      for (int ii=0; ii<field_num;ii++)
-        sb_destroy(fields+ii);   
+        sb_destroy(fields+ii);
 
 endfun:
     return ret;
@@ -268,35 +279,46 @@ int test(){
     printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
     sb_deletehead(&sb, 40);
     printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
-    
-freeStringBuffer:       
+
+freeStringBuffer:
     sb_destroy(&sb);
-    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string); 
-    
+    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
+
     int field_num = 5;
-    stringBuffer fields[field_num];
-    // fields = (stringBuffer*)malloc(sizeof(stringBuffer*)*field_num);
-    sb_init(fields,64); 
-    sb_append(fields,"hello world "); 
-    sb_init(&fields[1],16); 
-    sb_init(&fields[2],16);
-    sb_init(&fields[3],16);
-    sb_init(&fields[4],128);
-     
-    for (int ii=0; ii<field_num;ii++)
-        printf( "size:%zu pos:%i \nstring:%s\n\n",
-                fields[ii].size, fields[ii].pos, fields[ii].string);
-    
-    for (int iii=0; iii<field_num;iii++){
-        printf( "destroying %i\n",iii); 
-        sb_destroy(fields+iii);   
+    int allocated = 0;
+    //stringBuffer fields[field_num];
+    stringBuffer** fields = (stringBuffer**)malloc(sizeof(stringBuffer*)*field_num);
+    for (; allocated<field_num;allocated++){
+        fields[allocated] = malloc(sizeof(stringBuffer));
+        if (!fields[allocated]){
+            perror("Memory allocation error! ");
+            goto cleanDarray;
+        }
     }
+    printf("allocated %i \n",allocated);
+    sb_init(fields[0],64);
+    sb_append(fields[0],"hello world ");
+    sb_init(fields[1],16);
+    sb_init(fields[2],16);
+    sb_init(fields[3],16);
+    sb_init(fields[4],128);
+
     for (int ii=0; ii<field_num;ii++)
         printf( "size:%zu pos:%i \nstring:%s\n\n",
-                fields[ii].size, fields[ii].pos, fields[ii].string);
+                fields[ii]->size, fields[ii]->pos, fields[ii]->string);
+cleanDarray:
+    for (int iii=0; iii<allocated;iii++){
+        printf( "destroying %i\n",iii);
+        sb_destroy(fields[iii]);
+        zfree(&fields[iii]);
+    }
+    free(fields);
+    //for (int ii=0; ii<field_num;ii++)
+    //    printf( "size:%zu pos:%i \nstring:%s\n\n",
+    //            fields[ii]->size, fields[ii]->pos, fields[ii]->string);
 
     exit(0);
-} 
+}
 
 
 int main(void){
@@ -308,7 +330,7 @@ int main(void){
         exit(EXIT_FAILURE);
     }
     fprintf(stderr, "Max PID: %i\n",max_pid);
-    if (test()) 
+    if (test())
         exit(EXIT_FAILURE);
     exit(EXIT_SUCCESS);
 }
