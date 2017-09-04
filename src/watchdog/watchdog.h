@@ -3,14 +3,14 @@
 
 #include <sys/types.h>
 
-
+#define NOMINAL 0
 
 //################ Stringbuffer #############
 
 typedef struct {
     char* string;
     size_t size;
-    u_int32_t pos;
+    u_int32_t end_pos;
 } stringBuffer;
 
 /**
@@ -42,10 +42,24 @@ int sb_append(stringBuffer* this, char* string);
  */
 void sb_deletehead(stringBuffer* this, size_t len);
 
+/** 
+ * reset string in StringBuffer to empty string
+ */
+void sb_flush(stringBuffer* this);
+
 /**
  * Destructor of StringBuffer
  */
 void sb_destroy(stringBuffer* this);
+
+/**
+ * Get copy of StringBuffer string
+ * @retString: uninitialized passthrough string 
+ *             that gets filled with content
+ * @returns: (0/NOMINAL) if allocation and assignment happend
+ *           (1) if allocation failed
+ */
+int sb_stringCpy(stringBuffer* this, char* retString);
 
 //########## Ringbuffer ###############
 #define SIZE_RING 1024

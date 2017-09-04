@@ -208,7 +208,7 @@ cat -v trace_pipe | $awk -v o=$offset -v kname=$kname '
 		time = $(3+o); sub(":", "", time)
 		printf "%-16s ", time
 		#}
-		printf "%-16.16s\t%-6s\t%4s\t%s\n", comm, opid, rval, filename >> "/dev/stdout"
+		printf "%-16.16s\t%-s\t%s\t%s\n", comm, opid, rval, filename >> "/dev/stdout"
 	}
     #execve output
 

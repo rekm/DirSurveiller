@@ -18,45 +18,61 @@ int sb_init(stringBuffer* this, size_t size){
     if (!this->string | !size)
         return 1;
     this->size = size;
-    this->pos = 0;
+    this->end_pos = 0;
     this->string[0] = '\0';
     return 0;
 }
 
 int sb_appendl(stringBuffer* this, char* string, size_t len){
-    while (this->pos+len >= this->size){
-        char *ret = realloc(this->string,sizeof(char)*this->size*2);
+    while (this->end_pos+len >= this->size){
+        char *ret = realloc(this->string,this->size*2);
         if(!ret) return 1;
         this->size = this->size*2;
     }
-    memcpy(this->string+this->pos, string, len);
-    this->pos+=len;
+    memcpy(this->string+this->end_pos, string, len);
+    this->end_pos+=len;
     return 0;
 }
 
 int sb_append(stringBuffer* this, char* string){
     size_t len = strlen(string);
-    while (this->pos+len >= this->size){
-        char *ret = realloc(this->string,sizeof(char)*this->size*2);
+    while (this->end_pos+len >= this->size){
+        char *ret = realloc(this->string, this->size*2);
         if(!ret) return 1;
         this->size = this->size*2;
         this->string = ret;
     }
-    memcpy(this->string+this->pos, string, len+1);
-    this->pos+=len;
+    memcpy(this->string+this->end_pos, string, len+1);
+    this->end_pos+=len;
     return 0;
 }
 
 void sb_deletehead(stringBuffer* this, size_t len){
-    if (len > this->pos) len = this->pos;
-    memmove(this->string, this->string+len, this->pos+1 - len);
-    this->pos -= len;
+    if (len > this->end_pos) len = this->end_pos;
+    memmove(this->string, this->string+len, this->end_pos+1 - len);
+    this->end_pos -= len;
 }
+
+void sb_flush(stringBuffer* this){
+    memset(this->string, 0, this->size);
+    this->end_pos = 0;
+}
+
 
 void sb_destroy(stringBuffer* this){
     this->size = 0;
-    this->pos = 0;
+    this->end_pos = 0;
     zfree(&this->string);
+}
+
+int sb_stringCpy(stringBuffer* this, char* retString){
+    int ret = NOMINAL;
+    retString = malloc(this->end_pos+1);
+    if(!retString)
+        ret=1;
+    else
+        memcpy(retString, this->string, this->end_pos+1);  
+    return ret;
 }
 
 // Char ringbuffer implementation
@@ -152,20 +168,24 @@ void g_ringBuffer_destroy(g_ringBuffer* rb){
  * Handling of incomming opencalls and filtering of them
  */
 int surv_handleOpenCallSocket(void* surv_struct){
-    int ret = 0;
-    char buf[256];
-    stringBuffer sbuf;
-    int field_num = 5;
-    enum FieldDesc { OTime, Cmd, PID, Rval, Path} fieldname;
+    int ret = 0;    
+    char buf[256]; //buffer for recieve call
+    /* 
+     * more dynamic buffer with functions that
+     * make usage more enjoyable
+     */
+    stringBuffer sbuf;    
+    int field_num = 5; // Number of fields that need parsing
+    enum FieldDesc { OTime, Cmd, PID, Rval, Path};
+    // Array of dynamic StringBuffers for fields
     stringBuffer fields[field_num];
-    int bufpos = 0;
-    int rc;
+    int rc_fd; // recieve file descriptor
     ssize_t rlen;
     struct sockaddr_un addr;
 
     ret = sb_init(&sbuf, 512);
     surveiller* surv = (surveiller*) surv_struct;
-    if ( (rc = socket(AF_UNIX, SOCK_STREAM, 0)) == -1){
+    if ( (rc_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1){
         ret = 2;
         goto endfun;
     }
@@ -175,21 +195,26 @@ int surv_handleOpenCallSocket(void* surv_struct){
         *addr.sun_path = '\0';
         strncpy( addr.sun_path + 1,
                 surv->opencall_socketaddr + 1, sizeof(addr.sun_path) - 2);
-     } else {
+    } else {
         strncpy(addr.sun_path,
                 surv->opencall_socketaddr, sizeof(addr.sun_path) -1);
-     }
-     if (connect( rc, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
-         ret = 3;
-         goto endfun;
-     }
-     /* Fields:
-      *     time 34 chars
-      *     command name 7
-      *     PID  5
-      *     Return Val
-      *     filename unbounded 100
-      */
+    }
+    if (connect( rc_fd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
+        ret = 3;
+        goto endfun;
+    }
+    //parse input 
+     
+    /* Fields:
+     *     time 34 chars
+     *     command name 7
+     *     PID  5
+     *     Return Val
+     *     filename unbounded 100
+     */
+    int curr_field = 0;
+    int lfield_start = 0;
+    
     ret = (sb_init(&fields[OTime],64)
          | sb_init(&fields[Cmd],32)
          | sb_init(&fields[PID],16)
@@ -197,13 +222,30 @@ int surv_handleOpenCallSocket(void* surv_struct){
          | sb_init(&fields[Path],128) );
     if(ret)
         goto cleanupStringBuffers;
-
-
-
-     while( (rlen = recv(rc, buf, sizeof(buf), 0)) != -1){
+    
+    
+    while( (rlen = recv(rc_fd, buf, sizeof(buf), 0)) != -1){
         printf( "%s\n", buf);
-        sb_append(&sbuf, buf);
-        for (int i=0; i<=sbuf.pos; i++){
+        ret = sb_append(&sbuf, buf);
+        if(ret) break;
+        for (int i=0; i<=sbuf.end_pos; i++){            
+            switch (sbuf.string[i]){
+                case '\n':                    
+                    //finish struct
+                    if (curr_field >= field_num - 1){
+                        //Error try and recover
+                        lfield_start = 0;
+                    }
+                    else {
+                         
+                         
+                    }
+                    //flush fieldbuffers 
+                    for (int ii=0; ii<field_num; ii++)
+                       sb_flush(&fields[ii]);
+                   break; 
+                    
+                                            
 
         }
      }
