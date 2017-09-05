@@ -3,9 +3,10 @@
 #include <string.h>
 #include <signal.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include "watchdog.h"
-
+#include <fcntl.h>
 
 #define zfree(ptr) ({ free(*ptr); *ptr = NULL; })
 
@@ -65,13 +66,13 @@ void sb_destroy(stringBuffer* this){
     zfree(&this->string);
 }
 
-int sb_stringCpy(stringBuffer* this, char* retString){
+int sb_stringCpy(char* retString, stringBuffer* this){
     int ret = NOMINAL;
     retString = malloc(this->end_pos+1);
     if(!retString)
         ret=1;
     else
-        memcpy(retString, this->string, this->end_pos+1);  
+        memcpy(retString, this->string, this->end_pos+1);
     return ret;
 }
 
@@ -164,17 +165,85 @@ void g_ringBuffer_destroy(g_ringBuffer* rb){
     }
     zfree(&rb->buffer);
 }
+
+
+// OpenCall utils
+
+/**
+ * Setting up an openCall with a stringBuffers
+ * containing the relevant information via
+ * pass through
+ * @returns:(-1/_) if inode determination fails
+ *           (0/NOMINAL) if success
+ *           (1/_) if memory allocation failed
+ *           (2/_) if timevalue cannot be parsed
+ */
+int openCall_init(openCall* this,
+                  stringBuffer* openTimeStamp,
+                  stringBuffer* cmdName,
+                  stringBuffer* pid,
+                  stringBuffer* returnVal,
+                  stringBuffer* path){
+    //filedescriptor for inode
+    int fd;
+    int ret = 0;
+    // timeStamp
+    int timedot = 0;
+    for(; timedot<openTimeStamp->end_pos; timedot++){
+       if(openTimeStamp->string[timedot] == '.'){
+          openTimeStamp->string[timedot] = '\0';
+          break;
+       }
+    }
+    if (timedot==openTimeStamp->end_pos){
+        ret = 2;
+        goto endfun;
+    }
+    this->time_stamp.tv_sec = atol(openTimeStamp->string);
+    this->time_stamp.tv_usec = atol(openTimeStamp->string+1+timedot);
+    // CMD name
+    ret = sb_stringCpy(this->cmdName, cmdName);
+    if(ret) goto endfun;
+    // FilePath
+    ret = sb_stringCpy(this->filepath, path);
+    if(ret) goto freeCmd;
+    this->flag = atoi(returnVal->string);
+    this->pid = atoi(pid->string);
+    //Get inode number
+    struct stat file_stat;
+    ret = stat(path->string, &file_stat);
+    if(ret<0) goto endfun;
+    this->inode = file_stat.st_ino;
+endfun:
+    return ret;
+
+freeCmd:
+    zfree(&this->cmdName);
+    return ret;
+}
+
+void openCall_print(openCall* this){
+    printf("Command: %s with PID: %i opened\n %s \n inode:%lu \n ts: %li.%li\n",
+            this->cmdName, this->pid, this->filepath, this->inode,
+            this->time_stamp.tv_sec,this->time_stamp.tv_usec);
+}
+
+void openCall_destroy(openCall* this){
+    zfree(&this->filepath);
+    zfree(&this->cmdName);
+}
+
 /**
  * Handling of incomming opencalls and filtering of them
  */
 int surv_handleOpenCallSocket(void* surv_struct){
-    int ret = 0;    
+    int ret = 0;
     char buf[256]; //buffer for recieve call
-    /* 
+    /*
      * more dynamic buffer with functions that
      * make usage more enjoyable
      */
-    stringBuffer sbuf;    
+    stringBuffer sbuf;
     int field_num = 5; // Number of fields that need parsing
     enum FieldDesc { OTime, Cmd, PID, Rval, Path};
     // Array of dynamic StringBuffers for fields
@@ -203,18 +272,18 @@ int surv_handleOpenCallSocket(void* surv_struct){
         ret = 3;
         goto endfun;
     }
-    //parse input 
-     
+    //parse input
+
     /* Fields:
      *     time 34 chars
      *     command name 7
      *     PID  5
-     *     Return Val
+     *     Flag
      *     filename unbounded 100
      */
     int curr_field = 0;
     int lfield_start = 0;
-    
+
     ret = (sb_init(&fields[OTime],64)
          | sb_init(&fields[Cmd],32)
          | sb_init(&fields[PID],16)
@@ -222,31 +291,55 @@ int surv_handleOpenCallSocket(void* surv_struct){
          | sb_init(&fields[Path],128) );
     if(ret)
         goto cleanupStringBuffers;
-    
-    
+
     while( (rlen = recv(rc_fd, buf, sizeof(buf), 0)) != -1){
         printf( "%s\n", buf);
         ret = sb_append(&sbuf, buf);
         if(ret) break;
-        for (int i=0; i<=sbuf.end_pos; i++){            
+        for (int i=0; i<=sbuf.end_pos; i++){
             switch (sbuf.string[i]){
-                case '\n':                    
+                case '\n':
                     //finish struct
                     if (curr_field >= field_num - 1){
                         //Error try and recover
-                        lfield_start = 0;
                     }
                     else {
-                         
-                         
+                        ret = sb_append(fields+curr_field,
+                                        sbuf.string+lfield_start);
+                        openCall oCall;
+                        switch (openCall_init(&oCall, fields+OTime,
+                                            fields+Cmd, fields+PID,
+                                            fields+Rval,fields+Path)){
+                            case NOMINAL:
+                                openCall_print(&oCall);
+                                openCall_destroy(&oCall);
+                                break;
+                            case 1:
+                                //Memory error => Panic
+                                perror("ToDo handle memory Error");
+                                break;
+                            case 2:
+                                perror("Handle misalignment of fields");
+                                break;
+                            case -1:
+                                openCall_print(&oCall);
+                                openCall_destroy(&oCall);
+                        }
+                        sb_deletehead(&sbuf,i+1);
+                        lfield_start = 0;
+                        curr_field =0;
+
                     }
-                    //flush fieldbuffers 
+                    //flush fieldbuffers
                     for (int ii=0; ii<field_num; ii++)
                        sb_flush(&fields[ii]);
-                   break; 
-                    
-                                            
-
+                    break;
+                case '\t':
+                    sbuf.string[i] = '\0';
+                    sb_append(fields+curr_field,sbuf.string+lfield_start);
+                    lfield_start = i+1;
+                    break;
+            }
         }
      }
 cleanupStringBuffers:
@@ -261,7 +354,6 @@ endfun:
 /**
  * Handler for incomming execcalls
  */
-
 int surv_handleExecCallSocket(void* surv_struct){
     int ret = 0;
     surveiller* surv = (surveiller*) surv_struct;
@@ -307,24 +399,24 @@ int test(){
         perror("Could not allocate memory\n");
         goto freeStringBuffer;
     }
-    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
+    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.end_pos, sb.string);
     printf( "Appending to Buffer\n");
     ret = sb_append(&sb,"hello world ");
-    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
+    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.end_pos, sb.string);
     ret = sb_append(&sb,"hello world ");
     ret = sb_append(&sb,"hello world ");
-    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
+    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.end_pos, sb.string);
     printf( "delete head\n");
     sb_deletehead(&sb,5);
-    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
+    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.end_pos, sb.string);
     sb_append(&sb, "hello");
-    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
+    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.end_pos, sb.string);
     sb_deletehead(&sb, 40);
-    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
+    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.end_pos, sb.string);
 
 freeStringBuffer:
     sb_destroy(&sb);
-    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.pos, sb.string);
+    printf( "size:%zu pos:%i \nstring:%s\n\n", sb.size, sb.end_pos, sb.string);
 
     int field_num = 5;
     int allocated = 0;
@@ -347,14 +439,14 @@ freeStringBuffer:
 
     for (int ii=0; ii<field_num;ii++)
         printf( "size:%zu pos:%i \nstring:%s\n\n",
-                fields[ii]->size, fields[ii]->pos, fields[ii]->string);
+                fields[ii]->size, fields[ii]->end_pos, fields[ii]->string);
 cleanDarray:
     for (int iii=0; iii<allocated;iii++){
         printf( "destroying %i\n",iii);
         sb_destroy(fields[iii]);
         zfree(&fields[iii]);
     }
-    free(fields);
+    zfree(&fields);
     //for (int ii=0; ii<field_num;ii++)
     //    printf( "size:%zu pos:%i \nstring:%s\n\n",
     //            fields[ii]->size, fields[ii]->pos, fields[ii]->string);

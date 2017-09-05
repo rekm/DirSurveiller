@@ -2,6 +2,7 @@
 #define _WATCHDOG_H
 
 #include <sys/types.h>
+#include <sys/time.h>
 
 #define NOMINAL 0
 
@@ -42,7 +43,7 @@ int sb_append(stringBuffer* this, char* string);
  */
 void sb_deletehead(stringBuffer* this, size_t len);
 
-/** 
+/**
  * reset string in StringBuffer to empty string
  */
 void sb_flush(stringBuffer* this);
@@ -54,12 +55,12 @@ void sb_destroy(stringBuffer* this);
 
 /**
  * Get copy of StringBuffer string
- * @retString: uninitialized passthrough string 
+ * @retString: uninitialized passthrough string
  *             that gets filled with content
  * @returns: (0/NOMINAL) if allocation and assignment happend
  *           (1) if allocation failed
  */
-int sb_stringCpy(stringBuffer* this, char* retString);
+int sb_stringCpy(char* retString, stringBuffer* this);
 
 //########## Ringbuffer ###############
 #define SIZE_RING 1024
@@ -104,11 +105,24 @@ void char_ringBuffer_destroy(char_ringBuffer* rb);
  *  ->inode
  */
 typedef struct {
-    double time_stamp;
+    struct timeval time_stamp;
+    pid_t pid;
     int flag;
+    char* cmdName;
     char* filepath;
-    long inode;
+    __INO_T_TYPE inode;
 } openCall;
+
+int openCall_init(openCall* this,
+                  stringBuffer* openTimeStamp,
+                  stringBuffer* cmdName,
+                  stringBuffer* pid,
+                  stringBuffer* returnVal,
+                  stringBuffer* Path);
+
+void openCall_destroy(openCall* this);
+
+void openCall_print(openCall* this);
 
 /**
  * Process
