@@ -1,5 +1,5 @@
 C=gcc
-CFLAGS=-I. -std=c99 -Wall
+CFLAGS=-I. -g -std=c99 -Wall
 DEPS = watchdog.h containers.h
 DEPS2 = containers.h
 OBJ = watchdog.o containers.o

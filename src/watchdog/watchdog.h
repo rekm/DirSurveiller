@@ -83,20 +83,22 @@ void execCall_print(execCall* this);
 typedef struct {
     //db_dispatch_handle
     //process** dispatchtrees
-    char* opencall_socketaddr;
-    char* execcall_socketaddr;
+    const char* opencall_socketaddr;
+    const char* execcall_socketaddr;
     execCall* procs;
     g_ringBuffer* commandQueue;
     g_ringBuffer* openQueue;
 } surveiller;
 
 
-int surv_init(surveiller*, const char* opencall_socketaddr,
+int surv_init(surveiller* this, const char* opencall_socketaddr,
               const char* execcall_socketaddr);
 
-int surv_check_running(surveiller* watchdog);
+int surv_check_running(surveiller* this);
+//Thread functions
 int surv_handleExecCallSocket(void* surv_struct);
 int surv_handleOpenCallSocket(void* surv_struct);
-int surv_construct_dispatchtrees(surveiller* watchdog);
-int surv_dispatch(surveiller* watchdog);
+int surv_construct_dispatchtrees(surveiller* this);
+int surv_dispatch(surveiller* this);
+void surv_destroy(surveiller* this);
 #endif

@@ -43,10 +43,11 @@ int openCall_init(openCall* this,
     this->time_stamp.tv_sec = atol(openTimeStamp->string);
     this->time_stamp.tv_usec = atol(openTimeStamp->string+1+timedot);
     // CMD name
-    ret = sb_stringCpy(this->cmdName, cmdName);
+    ret = sb_stringCpy(&this->cmdName, cmdName);
     if(ret) goto endfun;
+    //printf("%s\n",this->cmdName);
     // FilePath
-    ret = sb_stringCpy(this->filepath, path);
+    ret = sb_stringCpy(&this->filepath, path);
     if(ret) goto freeCmd;
     this->flag = atoi(returnVal->string);
     this->pid = atoi(pid->string);
@@ -64,7 +65,7 @@ freeCmd:
 }
 
 void openCall_print(openCall* this){
-    printf("Command: %s with PID: %i opened\n %s \n inode:%lu \n ts: %li.%li\n",
+    printf("Command: %s with PID: %i opened\n %s \n inode:%lu \n ts: %lis.%li\n",
             this->cmdName, this->pid, this->filepath, this->inode,
             this->time_stamp.tv_sec,this->time_stamp.tv_usec);
 }
@@ -130,21 +131,19 @@ int surv_handleOpenCallSocket(void* surv_struct){
          | sb_init(&fields[PID],16)
          | sb_init(&fields[Rval],8)
          | sb_init(&fields[Path],128) );
-    if(ret)
-        goto cleanupStringBuffers;
+    if(ret){
+        perror("Error with StringBuffer init");
+        goto cleanupStringBuffers;}
 
     while( (rlen = recv(rc_fd, buf, sizeof(buf), 0)) != -1){
-        printf( "%s\n", buf);
-        ret = sb_append(&sbuf, buf);
+        ret = sb_appendl(&sbuf, buf,rlen);
         if(ret) break;
         for (int i=0; i<=sbuf.end_pos; i++){
             switch (sbuf.string[i]){
                 case '\n':
                     //finish struct
-                    if (curr_field >= field_num - 1){
-                        //Error try and recover
-                    }
-                    else {
+                    if (curr_field == field_num - 1){
+                        sbuf.string[i] = '\0';
                         ret = sb_append(fields+curr_field,
                                         sbuf.string+lfield_start);
                         openCall oCall;
@@ -165,12 +164,11 @@ int surv_handleOpenCallSocket(void* surv_struct){
                             case -1:
                                 openCall_print(&oCall);
                                 openCall_destroy(&oCall);
+                                break;
                         }
-                        sb_deletehead(&sbuf,i+1);
-                        lfield_start = 0;
-                        curr_field =0;
-
                     }
+                    lfield_start = i+1;
+                    curr_field =0;
                     //flush fieldbuffers
                     for (int ii=0; ii<field_num; ii++)
                        sb_flush(&fields[ii]);
@@ -178,10 +176,13 @@ int surv_handleOpenCallSocket(void* surv_struct){
                 case '\t':
                     sbuf.string[i] = '\0';
                     sb_append(fields+curr_field,sbuf.string+lfield_start);
+                    curr_field++;
                     lfield_start = i+1;
                     break;
             }
         }
+        sb_deletehead(&sbuf,lfield_start);
+        lfield_start = 0;
     }
 cleanupStringBuffers:
      for (int ii=0; ii<field_num;ii++)
@@ -215,10 +216,10 @@ int execCall_init(execCall* this,
     this->time_stamp.tv_sec = atol(execTimeStamp->string);
     this->time_stamp.tv_usec = atol(execTimeStamp->string+1+timedot);
     // CMD name
-    ret = sb_stringCpy(this->cmdName, cmdName);
+    ret = sb_stringCpy(&this->cmdName, cmdName);
     if(ret) goto endfun;
     // Args
-    ret = sb_stringCpy(this->args, args);
+    ret = sb_stringCpy(&this->args, args);
     if(ret) goto freeCmd;
     this->ppid = atoi(ppid->string);
     this->pid = atoi(pid->string);
@@ -239,8 +240,22 @@ void execCall_print(execCall* this){
     printf("%s-> pid: %i ppid: %i time: %li.%li\n args: %s\n tracked: %i\n",
           this->cmdName, this->pid, this->ppid, this->time_stamp.tv_sec,
           this->time_stamp.tv_usec, this->args, this->tracked);
-}  
+}
 
+int surv_init(surveiller* this, const char* opencall_socketaddr,
+              const char* execcall_socketaddr){
+    this->opencall_socketaddr = opencall_socketaddr;
+    this->execcall_socketaddr = execcall_socketaddr;
+    //execCalls init
+    //Queue init
+    return NOMINAL;
+}
+
+void surv_destroy(surveiller* this){
+    //destroy execCalls
+    //destroy Queues
+    return;
+}
 
 
 /**
@@ -287,9 +302,9 @@ int surv_handleExecCallSocket(void* surv_struct){
     /* Fields:
      *     time 34 chars
      *     command name 7
-     *     PID  5
-     *     Flag
-     *     filename unbounded 100
+     *     PID  6
+     *     PPID 6
+     *     Args unbounded 100
      */
     int curr_field = 0;
     int lfield_start = 0;
@@ -303,19 +318,20 @@ int surv_handleExecCallSocket(void* surv_struct){
         goto cleanupStringBuffers;
 
     while( (rlen = recv(rc_fd, buf, sizeof(buf), 0)) != -1){
-        printf( "%s\n", buf);
-        ret = sb_append(&sbuf, buf);
+        printf( "\nbuffer: \n%s\n", buf);
+        ret = sb_appendl(&sbuf, buf, rlen);
+        printf( "\nsbuffer: \n%s\n", sbuf.string);
         if(ret) break;
         for (int i=0; i<=sbuf.end_pos; i++){
             switch (sbuf.string[i]){
                 case '\n':
                     //finish struct
-                    if (curr_field >= field_num - 1){
-                        //Error try and recover
-                    }
-                    else {
+                    if (curr_field == field_num - 1){
+                        sbuf.string[i] = '\0';
                         ret = sb_append(fields+curr_field,
                                         sbuf.string+lfield_start);
+                        printf("field: %i \n cont: %s\n",
+                                curr_field,fields[curr_field].string);
                         execCall eCall;
                         switch (execCall_init(&eCall, fields+OTime,
                                             fields+Cmd, fields+PID,
@@ -335,11 +351,9 @@ int surv_handleExecCallSocket(void* surv_struct){
                                 execCall_print(&eCall);
                                 execCall_destroy(&eCall);
                         }
-                        sb_deletehead(&sbuf,i+1);
-                        lfield_start = 0;
-                        curr_field =0;
-
                     }
+                    lfield_start = i+1;
+                    curr_field =0;
                     //flush fieldbuffers
                     for (int ii=0; ii<field_num; ii++)
                        sb_flush(&fields[ii]);
@@ -347,10 +361,17 @@ int surv_handleExecCallSocket(void* surv_struct){
                 case '\t':
                     sbuf.string[i] = '\0';
                     sb_append(fields+curr_field,sbuf.string+lfield_start);
+                    printf("field: %i \n cont: %s\n",
+                           curr_field,fields[curr_field].string);
+                    curr_field++;
                     lfield_start = i+1;
                     break;
+
             }
         }
+        sb_deletehead(&sbuf,lfield_start);
+        printf("Buffer:%s\n",sbuf.string);
+        lfield_start=0;
     }
 cleanupStringBuffers:
      for (int ii=0; ii<field_num;ii++)
@@ -388,16 +409,23 @@ endfun:
 
 
 
-
-
 int main(void){
     int max_pid;
-
+    int ret = NOMINAL;
     max_pid = get_max_PID();
     if (max_pid == -1) {
         fprintf(stderr, "Could not read /proc/sys/kernel/pid_max\n");
         exit(EXIT_FAILURE);
     }
     fprintf(stderr, "Max PID: %i\n",max_pid);
+    fprintf(stderr,"connecting to sockets: ...\n");
+    char* opensocket_addr = "/tmp/opentrace_opencalls";
+    char* execsocket_addr = "/tmp/opentrace_execcalls";
+    surveiller surv;
+    ret = surv_init(&surv, opensocket_addr, execsocket_addr);
+    if(ret)
+        exit(EXIT_FAILURE);
+    surv_handleExecCallSocket((void*)&surv);
+    surv_destroy(&surv);
     exit(EXIT_SUCCESS);
 }

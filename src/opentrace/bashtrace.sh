@@ -206,9 +206,9 @@ cat -v trace_pipe | $awk -v o=$offset -v kname=$kname '
 
 		#if (opt_time) {
 		time = $(3+o); sub(":", "", time)
-		printf "%-16s ", time
+		#printf "%s\t", time
 		#}
-		printf "%-16.16s\t%-s\t%s\t%s\n", comm, opid, rval, filename >> "/dev/stdout"
+		printf "%s\t%s\t%-s\t%s\t%s\n",time, comm, opid, rval, filename >> "/dev/stdout"
 	}
     #execve output
 
@@ -237,19 +237,26 @@ cat -v trace_pipe | $awk -v o=$offset -v kname=$kname '
 			args = comm " [?]"
 		} else {
 			args=$0
-			sub(/ arg[0-9]*=\(fault\).*/, "", args)
-			sub(/.*arg1="/, "", args)
-			gsub(/" arg[0-9]*="/, " ", args)
-			sub(/"$/, "", args)
+            sub(/.*arg1=\(fault\)/, "", args)
+            sub(/.*arg1="/, "", args)
+			gsub(/arg[0-9]*=\(fault\)/, "", args)
+            gsub(/" arg[0-9]*="/, " ", args)
+
+            #sub(/.*arg1="/, "", args)  #<-
+            #sub(/ arg[0-9]*=\(fault\).*/, "", args)
+			#sub(/.*arg1="/, "", args)
+			#gsub(/" arg[0-9]*="/, " ", args)
+
+            sub(/"$/, "", args)
 			if ($0 !~ /\(fault\)/)
 				args = args " [...]"
 		}
 
 		#if (opt_time) {
 		time = $(3+o); sub(":", "", time)
-		printf "%-16s ", time
+		#printf "%s\t", time
 		#}
-		printf "%-16.16s\t%6s\t%6s\t%6d\t%s\n", time, comm, pid, getppid[pid], args >> "/dev/stderr"
+		printf "%s\t%s\t%s\t%s\t%s\n", time, comm, pid, getppid[pid], args >> "/dev/stderr"
 		#if (!opt_duration)
 		fflush()
 		#if (!opt_reexec) {

@@ -200,9 +200,9 @@ int primeCommandToExecute(
         //Add sockets to set
         FD_SET(fd_open, &fds);
         FD_SET(fd_exec, &fds);
-//        if(( open_connection = accept( fd_open,NULL,NULL)) == -1) exit(-1);
-//        if(( exec_connection = accept( fd_exec,NULL,NULL)) == -1) exit(-1);
-        ret = select(fd_exec+1, &fds, NULL, NULL, &timeout);
+        if(  (( open_connection = accept( fd_open,NULL,NULL)) == -1)
+           | (( exec_connection = accept( fd_exec,NULL,NULL)) == -1)) exit(-1);
+        //ret = select(fd_exec+1, &fds, NULL, NULL, &timeout);
         dup2( open_connection, STDOUT_FILENO);
         dup2( exec_connection, STDERR_FILENO);
         close(open_connection);

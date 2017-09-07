@@ -59,7 +59,7 @@ void sb_destroy(stringBuffer* this);
  * @returns: (0/NOMINAL) if allocation and assignment happend
  *           (1) if allocation failed
  */
-int sb_stringCpy(char* retString, stringBuffer* this);
+int sb_stringCpy(char** retString, stringBuffer* this);
 
 //########## Ringbuffer ###############
 #define SIZE_RING 1024
@@ -69,7 +69,6 @@ typedef struct {
     u_int32_t write;
     void** buffer;
 } g_ringBuffer;
-
 
 int g_ringBuffer_init(g_ringBuffer* rb, size_t esize);
 int g_ringBuffer_write(g_ringBuffer* rb, void *content);

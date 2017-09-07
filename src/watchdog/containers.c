@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include "containers.h"
 // StringBuffer implementation
@@ -42,6 +43,7 @@ void sb_deletehead(stringBuffer* this, size_t len){
     if (len > this->end_pos) len = this->end_pos;
     memmove(this->string, this->string+len, this->end_pos+1 - len);
     this->end_pos -= len;
+    this->string[this->end_pos] = '\0';
 }
 
 void sb_flush(stringBuffer* this){
@@ -56,13 +58,14 @@ void sb_destroy(stringBuffer* this){
     zfree(&this->string);
 }
 
-int sb_stringCpy(char* retString, stringBuffer* this){
+int sb_stringCpy(char** retString, stringBuffer* this){
     int ret = NOMINAL;
-    retString = malloc(this->end_pos+1);
+    *retString = malloc(this->end_pos+1);
     if(!retString)
         ret=1;
     else
-        memcpy(retString, this->string, this->end_pos+1);
+        strcpy(*retString, this->string);
+        printf("%s\n",*retString);
     return ret;
 }
 
