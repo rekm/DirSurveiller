@@ -121,14 +121,14 @@ int g_ringBuffer_init(g_ringBuffer* rb, size_t esize){
 int g_ringBuffer_write(g_ringBuffer* rb, void* content){
     int ret = g_ringBuffer_full(rb);
     if(!ret)
-        rb->buffer[g_ringBuffer_mask(rb->write++)] = &content;
+        rb->buffer[g_ringBuffer_mask(rb->write++)] = content;
     return ret;
 }
 
-int g_ringBuffer_read(g_ringBuffer* rb, void* content){
+int g_ringBuffer_read(g_ringBuffer* rb, void** content){
     int ret = g_ringBuffer_empty(rb);
     if(!ret)
-       content = rb->buffer[g_ringBuffer_mask(rb->read++)];
+       *content = rb->buffer[g_ringBuffer_mask(rb->read++)];
     return ret;
 }
 
@@ -137,7 +137,7 @@ u_int32_t g_ringBuffer_mask(u_int32_t val){
 }
 
 int g_ringBuffer_empty(g_ringBuffer* rb){
-    return rb->read = rb->write;
+    return rb->read == rb->write;
 }
 
 int g_ringBuffer_full(g_ringBuffer* rb){
@@ -157,5 +157,18 @@ void g_ringBuffer_destroy(g_ringBuffer* rb){
         zfree(&value);
     }
     zfree(&rb->buffer);
+}
+
+void g_ringBuffer_destroyd(g_ringBuffer* this,
+                           void (*destruct_fun)(void*)){
+    int startSize = g_ringBuffer_size(this);
+    for (int i = 0; i < startSize; i++){
+        void* value = NULL;
+        if(g_ringBuffer_read(this, &value))
+            break;
+        destruct_fun(value);
+        //zfree(&value);
+    }
+    zfree(&this->buffer);
 }
 

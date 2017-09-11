@@ -105,9 +105,40 @@ endfun:
 }
 
 // Test for general Ringbuffers
-int test_grb(){
+void gb_sb_destroy(void* sb_void){
+    stringBuffer* sb = (stringBuffer*)sb_void;
+    printf("did this work: %s\n",sb->string);
+    sb_destroy(sb);
+    printf("Freeing workes\n");
+}
 
-    return NOMINAL;
+int test_grb(){
+    int ret = NOMINAL;
+    g_ringBuffer gring;
+    g_ringBuffer_init(&gring,sizeof(stringBuffer*));
+    stringBuffer firstEntry;
+    stringBuffer secondEntry;
+    ret = sb_init(&firstEntry, 32);
+    ret = sb_init(&secondEntry, 32);
+    ret = sb_append(&firstEntry, "FoooFooooFooo");
+    ret = sb_append(&secondEntry, "BaaarBAAR");
+    ret = g_ringBuffer_write(&gring, &firstEntry);
+    //Things gotten from Queue must be freed by reciever
+    void* voidReturnEntry;
+    printf("Ringbuffer contains %i elements\n",g_ringBuffer_size(&gring));
+    ret = g_ringBuffer_write(&gring, &secondEntry);
+    printf("Ringbuffer contains %i elements\n",g_ringBuffer_size(&gring));
+    ret = g_ringBuffer_read(&gring,&voidReturnEntry);
+    stringBuffer* returnEntry = (stringBuffer*)voidReturnEntry;
+    printf("First elem: %s\n",returnEntry->string);
+    printf("Ringbuffer contains %i elements\n",g_ringBuffer_size(&gring));
+    sb_destroy(returnEntry);
+    g_ringBuffer_destroyd(&gring, &gb_sb_destroy);
+    //gb_sb_destroy((void*)&firstEntry);
+    //gb_sb_destroy((void*)&secondEntry);
+    g_ringBuffer_destroy(&gring);
+
+    return ret;
 }
 
 

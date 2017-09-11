@@ -72,11 +72,33 @@ typedef struct {
 
 int g_ringBuffer_init(g_ringBuffer* rb, size_t esize);
 int g_ringBuffer_write(g_ringBuffer* rb, void *content);
-int g_ringBuffer_read(g_ringBuffer* rb, void *content);
+int g_ringBuffer_read(g_ringBuffer* rb, void **content);
 u_int32_t g_ringBuffer_size(g_ringBuffer* rb);
 u_int32_t g_ringBuffer_mask(u_int32_t val);
 int g_ringBuffer_empty(g_ringBuffer* rb);
 int g_ringBuffer_full(g_ringBuffer* rb);
+
+
+/**
+ * A destructor for a g_ringbuffer that clears allocated pointers\n
+ * and calls a given destructor function, to make sure that the stored\n
+ * data is also taken care of.\n
+ *
+ * @p this: A poiter to the general ringbuffer that needs destroying.
+ * @p destruct_fun: A function that will be called on each elemet in the
+ *                  buffer.
+ */
+void g_ringBuffer_destroyd(g_ringBuffer* this,
+                           void (*destruct_fun)(void*));
+
+
+/**
+ * A destructor function that clears the allocated pointers\n
+ * in a general ringbuffer struct.
+ *
+ * @p this: reference to g:ringbuffer to be destroyed
+ * @returns: void;
+ */
 void g_ringBuffer_destroy(g_ringBuffer* rb);
 
 // Ringbuffer chars
