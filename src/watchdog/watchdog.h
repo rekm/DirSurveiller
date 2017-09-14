@@ -88,7 +88,7 @@ void execCall_print(execCall* this);
  *                      used to keep track of the filtered filepath prefixes
  */
 typedef struct {
-    art_tree* filter_trie;
+    art_tree filter_trie;
 }openCall_filter;
 // initilization of filter
 int openCall_filter__init(openCall_filter* this);
@@ -160,10 +160,10 @@ typedef struct {
     //process** dispatchtrees
     const char* opencall_socketaddr;
     const char* execcall_socketaddr;
-    procindex* procs;
-    openCall_filter* open_filter;
-    g_ringBuffer* commandQueue;
-    g_ringBuffer* openQueue;
+    procindex procs;
+    openCall_filter open_filter;
+    g_ringBuffer commandQueue;
+    g_ringBuffer openQueue;
 } surveiller;
 
 /**

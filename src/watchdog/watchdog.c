@@ -135,21 +135,21 @@ void execCall_print(execCall* this){
 //OpenCall Filter
 
 int openCall_filter__init(openCall_filter* this){
-    return art_tree_init(this->filter_trie);
+    return art_tree_init(&this->filter_trie);
 }
 void openCall_filter__destroy(openCall_filter* this){
-    art_tree_destroy(this->filter_trie);
+    art_tree_destroy(&this->filter_trie);
 }
 
 int openCall_filter__filter(openCall_filter* this, openCall* openCall){
     return art_prefixl_search(
-            this->filter_trie,
+            &this->filter_trie,
             (unsigned char*) openCall->filepath,
             strlen(openCall->filepath)+1);
 }
 
 int openCall_filter__add(openCall_filter* this, const char* filepath){
-    return art_insert(this->filter_trie,
+    return art_insert(&this->filter_trie,
                       (const unsigned char*) filepath,
                       strlen(filepath)+1,0);
 }
@@ -221,23 +221,23 @@ int surv_init(surveiller* this, const char* opencall_socketaddr,
     this->is_processing_execcall_socket = 0;
     this->is_processing_opencall_socket = 0;
     //Filter init
-    ret = openCall_filter__init(this->open_filter);
+    ret = openCall_filter__init(&this->open_filter);
 
     //Process Index init
-    ret = procindex_init(this->procs, this->ownPID);
+    ret = procindex_init(&this->procs, this->ownPID);
 
     //Queue init
-    ret = g_ringBuffer_init(this->commandQueue, sizeof(execCall*));
+    ret = g_ringBuffer_init(&this->commandQueue, sizeof(execCall*));
     return ret;
 }
 
 void surv_destroy(surveiller* this){
     //destroy execCalls
     //destroy Queues
-    g_ringBuffer_destroyd(this->commandQueue, void_execCall_destroy);
-    procindex_destroy(this->procs);
+    g_ringBuffer_destroyd(&this->commandQueue, void_execCall_destroy);
+    procindex_destroy(&this->procs);
     //destroy OpencallFilter
-    openCall_filter__destroy(this->open_filter);
+    openCall_filter__destroy(&this->open_filter);
 }
 
 /**
@@ -465,12 +465,12 @@ int surv_handleExecCallSocket(void* surv_struct){
                                 //Handle case
                                 //execCall_print(&eCall);
                             case NOMINAL:
-                                ret = g_ringBuffer_write(surv->commandQueue,
+                                ret = g_ringBuffer_write(&surv->commandQueue,
                                                          &eCall);
                                 int tries = 0;
                                 while( ret & (tries<maxtries_enqueue)){
                                     ret = g_ringBuffer_write(
-                                            surv->commandQueue,
+                                            &surv->commandQueue,
                                             &eCall);
                                     tries++;
                                     sleep(seconds_to_wait);
