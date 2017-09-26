@@ -2,13 +2,14 @@
 #define _GNU_SOURCE
 #endif
 
-#include <stdio.h>
-#include <unistd.h>
-#include <string.h>
 #include <errno.h>
-#include <stdlib.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #include <sys/wait.h>
 #include <sys/ioctl.h>
@@ -78,7 +79,14 @@ out:
      return ret;
 }
 
-/*  Function that primes the user given command for execution and
+
+/**
+ * @brief Handle connections to server
+ */
+
+
+
+/**  Function that primes the user given command for execution and
  *  stops just before executing it.
  *
  *  It provides a way to signal failure of an execv command
@@ -86,8 +94,8 @@ out:
  *
  *  Pipes are used for parent child communication.
  *
- *  ListEntry: 0 recieve and 1 send*/
-
+ *  ListEntry: 0 recieve and 1 send
+ */
 int primeCommandToExecute(
         procController *controller, int argc, char **argv,
         void (*exec_error)(int signo, siginfo_t *info, void *ucontext)){
@@ -155,6 +163,13 @@ int primeCommandToExecute(
             exit(-1);
         }
 
+        int reuseEx = 1;
+        if(setsockopt(fd_exec, SOL_SOCKET, SO_REUSEADDR,
+                       &reuseEx, sizeof(reuseEx))){
+            fprintf(stderr, "Reuse failed with code %i\n",errno);
+            exit(-1);
+        }
+
         mode_t current_mask = umask((mode_t) 0111);
         if (bind(fd_open, (struct sockaddr*)&open_addr,
                  sizeof(open_addr)) == -1) {
@@ -185,7 +200,7 @@ int primeCommandToExecute(
         /* Closing the send ready pipeline signals readyness*/
         close(subcommand_ready2execPipe[1]);
         ret = read(startSignalPipe[0], &pmsg, 1);
-
+        signal(SIGPIPE, SIG_IGN);
         if (ret != 1) {
             if(ret == -1){
                 fprintf(stderr, "Error reading pipe\n");
@@ -208,8 +223,8 @@ int primeCommandToExecute(
         close(open_connection);
         close(exec_connection);
         execvp(args[0], (char**)args);
-        close(fd_exec);
-        close(fd_open);
+        //close(fd_exec);
+        //close(fd_open);
         if (exec_error) {
             union sigval val;
             val.sival_int = errno;

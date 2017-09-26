@@ -119,7 +119,7 @@ int procindex_init(procindex* this, pid_t guide_pid);
 void procindex_destroy(procindex* this);
 int procindex_add(procindex* this, execCall* call);
 execCall* procindex_retrieve(procindex* this, pid_t target_pid);
-
+int procindex_delete(procindex* this, pid_t target_pid);
 // ############### Surveiller struct ############### //
 
 /**
@@ -201,6 +201,19 @@ int surv_check_running(surveiller* this);
 int surv_handleExecCallSocket(void* surv_struct);
 
 
+/**
+ * @brief: handles OpenSocket and populates OpenCall Queue
+ *
+ * This thread function sets up and listens to the openCall
+ * Socket, specified in the suveiller struct. It parses the
+ * socket output, constructs openCallstructs and writes them into
+ * the openCallQueue of the surveiller struct.
+ * Currently uses a adaptive radix tree for filtering.
+ *
+ * @param surv_struct: surveiller struct pointer casted to void*
+ *                     of which the corresponding struct will be modified
+ * @return: 0, if exited normally
+ */
 int surv_handleOpenCallSocket(void* surv_struct);
 
 /**

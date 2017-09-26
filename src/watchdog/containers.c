@@ -65,7 +65,7 @@ int sb_stringCpy(char** retString, stringBuffer* this){
         ret=1;
     else
         strcpy(*retString, this->string);
-        printf("%s\n",*retString);
+        //printf("%s\n",*retString);
     return ret;
 }
 

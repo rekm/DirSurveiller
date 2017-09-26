@@ -46,6 +46,7 @@ flags = [
 #'-Wc++98-compat',
 #'-Wno-long-long',
 #'-Wno-variadic-macros',
+'-Wno-gnu',
 #'-fexceptions',
 #'-DNDEBUG',
 # You 100% do NOT need -DUSE_CLANG_COMPLETER in your flags; only the YCM
@@ -75,6 +76,7 @@ flags = [
 '-isystem',
 '../llvm/tools/clang/include',
 #'-I /usr/include/x86_64-linux-gnu'
+'-I ../dependencies/libart/src/',
 '-I',
 '.',
 '-I',

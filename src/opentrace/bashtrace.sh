@@ -30,7 +30,8 @@ tracing=/sys/kernel/debug/tracing
 flock=/var/tmp/.ftrace-lock; wroteflock=0
 opt_duration=0; duration=; opt_name=0; name=; opt_time=0; opt_reexec=0
 opt_argc=0; argc=8; max_argc=16; ftext=
-trap ':' INT QUIT TERM PIPE HUP	# sends execution to end tracing section
+trap ':' INT QUIT PIPE TERM HUP	# sends execution to end tracing section
+#trap "" PIPE
 
 function warn {
 	if ! eval "$@"; then
@@ -160,7 +161,8 @@ offset=$($awk 'BEGIN { o = 0; }
 ### print trace buffer
 warn "echo > trace"
 
-cat -v trace_pipe | $awk -v o=$offset -v kname=$kname '
+cat -v trace_pipe |(trap '' PIPE
+                    $awk -v o=$offset -v kname=$kname '
     #common fields
     #$1 != "#" {
     #    # task name can contain dashes and numbers
@@ -266,7 +268,7 @@ cat -v trace_pipe | $awk -v o=$offset -v kname=$kname '
 	}
 
 	$0 ~ /LOST.*EVENT[S]/ { print "WARNING: " $0 > "/dev/stderr" }
-'
+    ')
 
 # end tracing
 end

@@ -209,6 +209,13 @@ int procindex_add(procindex* this, execCall* call){
 endfun:
     return ret;
 }
+
+int procindex_opencall_add(procindex* this, openCall* ocall){
+    int ret = NOMINAL;
+
+
+    return ret;
+}
 // ################# Surveiller ################### //
 
 int surv_init(surveiller* this, const char* opencall_socketaddr,
