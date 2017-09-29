@@ -61,8 +61,9 @@ typedef struct {
     struct timeval time_stamp;
     char *cmdName;
     char *args;
+    size_t callBuff_size;
     int call_num;
-    openCall *calls;
+    openCall **callBuff;
 } execCall;
 
 
@@ -114,12 +115,28 @@ typedef struct {
     size_t size;
     size_t maxPid;
 } procindex;
-
+/**
+ * @brief Initialization of procindex struct
+ */
 int procindex_init(procindex* this, pid_t guide_pid);
+
+/**
+ * @brief Destructor of procindex struct
+ */
 void procindex_destroy(procindex* this);
+
+/**
+ * @brief adds process in form of an execCall to the index
+ */
 int procindex_add(procindex* this, execCall* call);
+
+/**
+ * @brief retrieves one execCall pointer and leaves a NULL
+ */
 execCall* procindex_retrieve(procindex* this, pid_t target_pid);
+
 int procindex_delete(procindex* this, pid_t target_pid);
+
 // ############### Surveiller struct ############### //
 
 /**
@@ -152,16 +169,16 @@ int procindex_delete(procindex* this, pid_t target_pid);
  */
 typedef struct {
     //Status
-    int is_shutting_down;
-    int is_processing_execcall_socket;
-    int is_processing_opencall_socket;
+    int shutting_down;
+    int processing_execcall_socket;
+    int processing_opencall_socket;
     pid_t ownPID;
-    //db_dispatch_handle
-    //process** dispatchtrees
     const char* opencall_socketaddr;
     const char* execcall_socketaddr;
+    const char* ctl_socketaddr;
     procindex procs;
     openCall_filter open_filter;
+    g_ringBuffer dispatchQueue;
     g_ringBuffer commandQueue;
     g_ringBuffer openQueue;
 } surveiller;
@@ -179,7 +196,8 @@ typedef struct {
  * @return: 0, if success
  */
 int surv_init(surveiller* this, const char* opencall_socketaddr,
-              const char* execcall_socketaddr);
+              const char* execcall_socketaddr,
+              const char* ctl_socketaddr);
 void surv_destroy(surveiller* this);
 
 int surv_check_running(surveiller* this);
@@ -198,7 +216,7 @@ int surv_check_running(surveiller* this);
  *                     of which the corresponding struct will be modified
  * @return: 0, if exited normally
  */
-int surv_handleExecCallSocket(void* surv_struct);
+void* surv_handleExecCallSocket(void* surv_struct);
 
 
 /**
@@ -214,7 +232,7 @@ int surv_handleExecCallSocket(void* surv_struct);
  *                     of which the corresponding struct will be modified
  * @return: 0, if exited normally
  */
-int surv_handleOpenCallSocket(void* surv_struct);
+void* surv_handleOpenCallSocket(void* surv_struct);
 
 /**
  * @brief: Handles unprivaliged access to deamon
@@ -229,9 +247,10 @@ int surv_handleOpenCallSocket(void* surv_struct);
  * @returns: 0 ,if it exited normally
  *           1 ,if memory allocation error occured
  */
-int surv_handleAccess(void* surv_struct);
+void* surv_handleAccess(void* surv_struct);
 
-int surv_construct_dispatchtrees(surveiller* this);
+void* surv_shutdown(void* surv_struct);
+
 
 int surv_dispatch(surveiller* this);
 

@@ -1,10 +1,14 @@
+#define _BSD_SOURCE
+#define _POSIX_C_SOURCE 200809L
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -77,7 +81,11 @@ void openCall_destroy(openCall* this){
     zfree(&this->cmdName);
 }
 
+void void_openCall_destroy(void* void_oCall){
+    openCall_destroy((openCall*) void_oCall);
+}
 
+// #############  ExecCall Utils ############## //
 int execCall_init(execCall* this,
                   stringBuffer* execTimeStamp,
                   stringBuffer* cmdName,
@@ -108,9 +116,18 @@ int execCall_init(execCall* this,
     if(ret) goto freeCmd;
     this->ppid = atoi(ppid->string);
     this->pid = atoi(pid->string);
+    this->callBuff = calloc(8, sizeof(*this->callBuff));
+    if(!this->callBuff){
+        ret = MEMORY_ALLOCATION_ERROR;
+        goto freeArgs;
+    }
+    this->call_num = 0;
+    this->callBuff_size = 8;
 endfun:
     return ret;
 
+freeArgs:
+    zfree(&this->args);
 freeCmd:
     zfree(&this->cmdName);
     return ret;
@@ -118,7 +135,9 @@ freeCmd:
 void execCall_destroy(execCall* this){
     zfree(&this->args);
     zfree(&this->cmdName);
-    //zfree(&this->calls);
+    for(int i=0; i<this->call_num; i++)
+        openCall_destroy(this->callBuff[i]);
+    zfree(&this->callBuff);
 }
 void void_execCall_destroy(void* void_exec_ptr){
     execCall_destroy((execCall*)void_exec_ptr);
@@ -191,15 +210,15 @@ int procindex_add(procindex* this, execCall* call){
         execCall** newExec = realloc(this->procs,
                                     this->size*2*sizeof(*this->procs));
         if(!newExec){
-            ret = 1;
+            ret = MEMORY_ALLOCATION_ERROR;
             goto endfun;
         }
         this->size = this->size*2;
     }
     for(; oldsize<this->size; oldsize++)
         this->procs[oldsize] = NULL;
-    if(this->procs[call->pid+1]){
-        ret = 2;
+    if(this->procs[call->pid+1]){ //PID already present = old process dead
+        ret = ALREADY_EXISTS_IN_CONTAINER;
         goto endfun;
     }
     if(!this->procs[call->ppid+1])
@@ -212,21 +231,67 @@ endfun:
 
 int procindex_opencall_add(procindex* this, openCall* ocall){
     int ret = NOMINAL;
+    while(this->size < ocall->pid+1){
+        size_t newSize = this->size*2;
+        newSize = (newSize <= this->maxPid) ? newSize : this->maxPid;
+        execCall** newProcs = realloc(this->procs,
+                                      sizeof(*this->procs)*newSize);
+        if(!newProcs){
+            ret = MEMORY_ALLOCATION_ERROR;
+            goto endfun;
+        }
+        for(; this->size < newSize; this->size++)
+            newProcs[this->size] = NULL;
+    }
 
-
+    execCall* target_execCall = this->procs[ocall->pid+1];
+    if(target_execCall){
+        if(target_execCall->call_num+2==target_execCall->callBuff_size){
+            openCall* newCallBuff =
+                realloc(target_execCall->callBuff,
+                        target_execCall->callBuff_size*2);
+            if(!newCallBuff){
+               ret = MEMORY_ALLOCATION_ERROR;
+               goto endfun;
+            }
+            target_execCall->callBuff_size *= 2;
+        }
+    }
+    else{
+        //Setup dummy process
+        execCall newProc;
+        newProc.ppid = 0; //Unknown parent
+        newProc.args = "unknown";
+        newProc.pid = ocall->pid;
+        newProc.cmdName = ocall->cmdName;
+        newProc.callBuff = calloc(8, sizeof(*newProc.callBuff));
+        if(!newProc.callBuff){
+            ret = MEMORY_ALLOCATION_ERROR;
+            goto endfun;
+        }
+        newProc.callBuff_size = 8;
+        newProc.callBuff[0] = ocall;
+        newProc.call_num = 0;
+        procindex_add(this, &newProc);
+    }
+    target_execCall->call_num++;
+    target_execCall->callBuff[target_execCall->call_num] = ocall;
+endfun:
     return ret;
 }
 // ################# Surveiller ################### //
 
 int surv_init(surveiller* this, const char* opencall_socketaddr,
-              const char* execcall_socketaddr){
+              const char* execcall_socketaddr,
+              const char* ctl_socketaddr){
     int ret = NOMINAL;
     this->opencall_socketaddr = opencall_socketaddr;
     this->execcall_socketaddr = execcall_socketaddr;
+    this->ctl_socketaddr = ctl_socketaddr;
     this->ownPID = getpid();
-    this->is_shutting_down = 0;
-    this->is_processing_execcall_socket = 0;
-    this->is_processing_opencall_socket = 0;
+    this->shutting_down = 0;
+    this->processing_execcall_socket = 0;
+    this->processing_opencall_socket = 0;
     //Filter init
     ret = openCall_filter__init(&this->open_filter);
 
@@ -235,6 +300,10 @@ int surv_init(surveiller* this, const char* opencall_socketaddr,
 
     //Queue init
     ret = g_ringBuffer_init(&this->commandQueue, sizeof(execCall*));
+
+    ret = g_ringBuffer_init(&this->openQueue, sizeof(openCall*));
+
+    ret = g_ringBuffer_init(&this->dispatchQueue, sizeof(execCall*));
     return ret;
 }
 
@@ -242,6 +311,7 @@ void surv_destroy(surveiller* this){
     //destroy execCalls
     //destroy Queues
     g_ringBuffer_destroyd(&this->commandQueue, void_execCall_destroy);
+    g_ringBuffer_destroyd(&this->openQueue, void_openCall_destroy);
     procindex_destroy(&this->procs);
     //destroy OpencallFilter
     openCall_filter__destroy(&this->open_filter);
@@ -250,8 +320,9 @@ void surv_destroy(surveiller* this){
 /**
  * Handling of incomming opencalls and filtering of them
  */
-int surv_handleOpenCallSocket(void* surv_struct){
-    int ret = 0;
+void* surv_handleOpenCallSocket(void* surv_struct){
+    int* ret = malloc(sizeof(*ret));
+    *ret = 0;
     char buf[256]; //buffer for recieve call
     /*
      * more dynamic buffer with functions that
@@ -266,10 +337,10 @@ int surv_handleOpenCallSocket(void* surv_struct){
     ssize_t rlen;
     struct sockaddr_un addr;
 
-    ret = sb_init(&sbuf, 512);
+    *ret = sb_init(&sbuf, 512);
     surveiller* surv = (surveiller*) surv_struct;
     if ( (rc_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1){
-        ret = 2;
+        *ret = 2;
         goto endfun;
     }
     memset(&addr, 0, sizeof(addr));
@@ -283,7 +354,7 @@ int surv_handleOpenCallSocket(void* surv_struct){
                 surv->opencall_socketaddr, sizeof(addr.sun_path) -1);
     }
     if (connect( rc_fd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
-        ret = 3;
+        *ret = 3;
         goto endfun;
     }
     //parse input
@@ -299,31 +370,31 @@ int surv_handleOpenCallSocket(void* surv_struct){
     int lfield_start = 0;
     int allocated = 0;
 
-    ret = sb_init(&fields[OTime],64);
-    if(ret) goto cleanupStringBuffers; allocated++;
-    ret = sb_init(&fields[Cmd],32);
-    if(ret) goto cleanupStringBuffers; allocated++;
-    ret = sb_init(&fields[PID],16);
-    if(ret) goto cleanupStringBuffers; allocated++;
-    ret = sb_init(&fields[Rval],8);
-    if(ret) goto cleanupStringBuffers; allocated++;
-    ret = sb_init(&fields[Path],128);
-    if(ret) goto cleanupStringBuffers; allocated++;
+    *ret = sb_init(&fields[OTime],64);
+    if(*ret) goto cleanupStringBuffers; allocated++;
+    *ret = sb_init(&fields[Cmd],32);
+    if(*ret) goto cleanupStringBuffers; allocated++;
+    *ret = sb_init(&fields[PID],16);
+    if(*ret) goto cleanupStringBuffers; allocated++;
+    *ret = sb_init(&fields[Rval],8);
+    if(*ret) goto cleanupStringBuffers; allocated++;
+    *ret = sb_init(&fields[Path],128);
+    if(*ret) goto cleanupStringBuffers; allocated++;
 
     while( (rlen = recv(rc_fd, buf, sizeof(buf), 0)) != -1){
         if(!rlen){
             printf("No longer recieving data\n");
             break;
         }
-        ret = sb_appendl(&sbuf, buf,rlen);
-        if(ret) break;
+        *ret = sb_appendl(&sbuf, buf,rlen);
+        if(*ret) break;
         for (int i=0; i<=sbuf.end_pos; i++){
             switch (sbuf.string[i]){
                 case '\n':
                     //finish struct
                     if (curr_field == field_num - 1){
                         sbuf.string[i] = '\0';
-                        ret = sb_append(fields+curr_field,
+                        *ret = sb_append(fields+curr_field,
                                         sbuf.string+lfield_start);
                         openCall oCall;
                         switch (openCall_init(&oCall, fields+OTime,
@@ -375,8 +446,9 @@ endfun:
 /**
  * Handler for incomming execcalls
  */
-int surv_handleExecCallSocket(void* surv_struct){
-    int ret = 0;
+void* surv_handleExecCallSocket(void* surv_struct){
+
+    int* ret = malloc(sizeof(*ret));
     int maxtries_enqueue = 3;
     unsigned int seconds_to_wait = 20;
     char buf[256]; //buffer for recieve call
@@ -393,14 +465,14 @@ int surv_handleExecCallSocket(void* surv_struct){
     ssize_t rlen;
     struct sockaddr_un addr;
 
-    ret = sb_init(&sbuf, 512);
-    if( ret ) {
+    *ret = sb_init(&sbuf, 512);
+    if( *ret ) {
         goto endfun;
     }
 
     surveiller* surv = (surveiller*) surv_struct;
     if ( (rc_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1){
-        ret = 2;
+        *ret = 2;
         goto endfun;
     }
     memset(&addr, 0, sizeof(addr));
@@ -414,7 +486,7 @@ int surv_handleExecCallSocket(void* surv_struct){
                 surv->execcall_socketaddr, sizeof(addr.sun_path) -1);
     }
     if (connect( rc_fd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
-        ret = 3;
+        *ret = 3;
         goto cleanupRecieveBuffer;
     }
     //parse input
@@ -429,7 +501,7 @@ int surv_handleExecCallSocket(void* surv_struct){
     int curr_field = 0;
     int lfield_start = 0;
 
-    ret = (sb_init(&fields[OTime],64)
+    *ret = (sb_init(&fields[OTime],64)
          | sb_init(&fields[Cmd],32)
          | sb_init(&fields[PID],16)
          | sb_init(&fields[PPID],16)
@@ -443,7 +515,7 @@ int surv_handleExecCallSocket(void* surv_struct){
             break;
         }
         //printf( "\nbuffer: \n%s\n", buf);
-        ret = sb_appendl(&sbuf, buf, rlen);
+        *ret = sb_appendl(&sbuf, buf, rlen);
         //printf( "\nsbuffer: \n%s\n", sbuf.string);
         if(ret) break;
         for (int i=0; i<=sbuf.end_pos; i++){
@@ -452,7 +524,7 @@ int surv_handleExecCallSocket(void* surv_struct){
                     //finish struct
                     if (curr_field == field_num - 1){
                         sbuf.string[i] = '\0';
-                        ret = sb_append(fields+curr_field,
+                        *ret = sb_append(fields+curr_field,
                                         sbuf.string+lfield_start);
                         //printf("field: %i \n cont: %s\n",
                         //        curr_field,fields[curr_field].string);
@@ -472,11 +544,11 @@ int surv_handleExecCallSocket(void* surv_struct){
                                 //Handle case
                                 //execCall_print(&eCall);
                             case NOMINAL:
-                                ret = g_ringBuffer_write(&surv->commandQueue,
+                                *ret = g_ringBuffer_write(&surv->commandQueue,
                                                          &eCall);
                                 int tries = 0;
-                                while( ret & (tries<maxtries_enqueue)){
-                                    ret = g_ringBuffer_write(
+                                while( *ret & (tries<maxtries_enqueue)){
+                                    *ret = g_ringBuffer_write(
                                             &surv->commandQueue,
                                             &eCall);
                                     tries++;
@@ -484,7 +556,7 @@ int surv_handleExecCallSocket(void* surv_struct){
                                 }
                                 if(ret){
                                     execCall_destroy(&eCall);
-                                    ret = 4;
+                                    *ret = 4;
                                     goto cleanupStringBuffers;
                                 }
                         }
@@ -518,6 +590,36 @@ cleanupStringBuffers:
 cleanupRecieveBuffer:
     sb_destroy(&sbuf);
 endfun:
+    return (void*)ret;
+}
+
+void* surv_shutdown(void* surv_struct){
+    int* ret = malloc(sizeof(*ret));
+    *ret = NOMINAL;
+    surveiller* surv = (surveiller*) surv_struct;
+    int caught_a_fish;
+    sigset_t signals;
+    sigemptyset(&signals);
+    sigaddset(&signals,SIGTERM);
+    /* Let this thread kick back, get some quality time alone
+     * and let it follow its true passion... fishing SIGNALFISH. */
+    sigwait(&signals, &caught_a_fish);
+    surv->shutting_down = 1;
+    return ret;
+}
+
+int surv_addExecCall(surveiller* this, execCall* ecall){
+    int ret = NOMINAL;
+    ret = procindex_add(&this->procs, ecall);
+    if (ret == ALREADY_EXISTS_IN_CONTAINER){
+        execCall* retrieved_Ecall;
+        retrieved_Ecall = procindex_retrieve(&this->procs, ecall->pid);
+        if(!retrieved_Ecall){
+            //Could not retrieve eCall
+        }
+        ret = g_ringBuffer_write(&this->dispatchQueue, retrieved_Ecall);
+        ret = procindex_add(&this->procs, ecall);
+    }
     return ret;
 }
 /**
@@ -559,13 +661,119 @@ int main(void){
     }
     fprintf(stderr, "Max PID: %i\n",max_pid);
     fprintf(stderr,"connecting to sockets: ...\n");
-    char* opensocket_addr = "/tmp/opentrace_opencalls";
-    char* execsocket_addr = "/tmp/opentrace_execcalls";
+    char* opensocket_addr = "/tmp/opentrace_opencalls.socket";
+    char* execsocket_addr = "/tmp/opentrace_execcalls.socket";
+    char* ctlsocket_addr = "/tmp/opentrace_ctl.socket";
     surveiller surv;
-    ret = surv_init(&surv, opensocket_addr, execsocket_addr);
+    ret = surv_init(&surv,
+                    opensocket_addr,
+                    execsocket_addr,
+                    ctlsocket_addr);
     if(ret)
         exit(EXIT_FAILURE);
-    surv_handleExecCallSocket((void*)&surv);
+    //  Blocking Signals in Threads   //
+
+    /* Lock down SIGTERM and maybe other signals so
+     * that everything is neat if we need a hasty exit. */
+    sigset_t signals2block;
+    sigemptyset(&signals2block);
+    sigaddset(&signals2block, SIGTERM);
+    pthread_sigmask(SIG_BLOCK, &signals2block, NULL);
+
+    // Setting up Threads //
+
+    pthread_t threadExecId;
+    int* t_exec_ret;
+    pthread_t threadOpenId;
+    int* t_open_ret;
+    pthread_t threadShutdownId;
+    ret = pthread_create(&threadExecId, NULL,
+                         &surv_handleExecCallSocket, &surv);
+    ret = pthread_create(&threadOpenId, NULL,
+                         &surv_handleOpenCallSocket, &surv);
+    ret = pthread_create(&threadShutdownId, NULL,
+                         &surv_shutdown, &surv);
+
+    // Main loop of programm
+    int ready_calls = 0;
+    int ecall_first = 0;
+    int compMode = 0;
+    int has_next = 0;
+    int needs_dispatch =0;
+    size_t counter = 1;
+    execCall* tempEcall;
+    openCall* tempOcall;
+    // Somewhat convoluted logic determining flow control
+
+
+    while(!surv.shutting_down){
+        if(!(counter % 128))
+           sleep(1);
+        if(counter >= 424242)
+           surv.shutting_down = 1;
+        // Moving through and comparing timestamps on both Queues
+        if(compMode){
+            ecall_first = timercmp(&tempEcall->time_stamp,
+                                   &tempOcall->time_stamp, <=);
+            if(ecall_first){
+                surv_addExecCall(&surv, tempEcall);
+            }
+            else
+                procindex_opencall_add(&surv.procs, tempOcall);
+            has_next =
+              ( ecall_first && g_ringBuffer_size(&surv.commandQueue))
+              || (!ecall_first && g_ringBuffer_size(&surv.openQueue));
+
+            if(has_next){
+                if(ecall_first)
+                    g_ringBuffer_read(&surv.commandQueue, ((void**)tempEcall));
+                else
+                    g_ringBuffer_read(&surv.openQueue, ((void**)tempOcall));
+            }
+            else{
+                if(!ecall_first)
+                    surv_addExecCall(&surv, tempEcall);
+                else
+                    procindex_opencall_add(&surv.procs, tempOcall);
+                ready_calls = 0;
+                compMode = 0;
+            }
+        }
+        else{
+
+            if(g_ringBuffer_size(&surv.commandQueue))
+                ready_calls++;
+            if(g_ringBuffer_size(&surv.openQueue)){
+                if(ready_calls){
+                    g_ringBuffer_read(&surv.commandQueue,(void**) &tempEcall);
+                    g_ringBuffer_read(&surv.commandQueue,(void**) &tempOcall);
+                    compMode = 1;
+                    continue;
+                }
+
+                else{
+                    needs_dispatch = procindex_opencall_add(&surv.procs,
+                                                            tempOcall);
+                    if(needs_dispatch){
+                        //Move to dispatch queue and try again
+                    }
+                    ready_calls = 0;
+                }
+            }
+            if(ready_calls){
+                procindex_add(&surv.procs, tempEcall);
+                if(needs_dispatch){
+
+                }
+            }
+        }
+
+
+        counter++;
+    }
+
+    pthread_join(threadExecId,(void**)&t_exec_ret);
+    pthread_join(threadOpenId,(void**)&t_open_ret);
     surv_destroy(&surv);
     exit(EXIT_SUCCESS);
 }

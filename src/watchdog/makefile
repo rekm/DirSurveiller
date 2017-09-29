@@ -1,9 +1,9 @@
 C=gcc
-CFLAGS=-I. -I ../dependencies/libart/src -g -std=c99 -Wall
-DEPS = watchdog.h containers.h ../dependencies/libart/src/art.h
-DEPS2 = containers.h
-OBJ = watchdog.o containers.o ../dependencies/libart/src/art.o
-OBJ2 = tests.o containers.o ../dependencies/libart/src/art.o
+CFLAGS=-I. -I ../dependencies/libart/src -g -std=c99 -Wall -lpthread
+DEPS = watchdog.h containers.h ../dependencies/libart/src/art.h definitions.h
+DEPS2 = containers.h definitions.h
+OBJ = watchdog.o containers.o ../dependencies/libart/src/art.o definitions.o
+OBJ2 = tests.o containers.o ../dependencies/libart/src/art.o definitions.o
 
 all: watchdog watchdog_tests
 

@@ -2,9 +2,7 @@
 #define _CONTAINERS_H
 
 #include <sys/types.h>
-
-#define zfree(ptr) ({ free(*ptr); *ptr = NULL; })
-#define NOMINAL 0
+#include "definitions.h"
 //################ Stringbuffer #############
 
 typedef struct {
