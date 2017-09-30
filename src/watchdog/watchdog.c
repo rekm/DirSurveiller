@@ -273,6 +273,7 @@ int procindex_opencall_add(procindex* this, openCall* ocall){
         newProc.callBuff[0] = ocall;
         newProc.call_num = 0;
         procindex_add(this, &newProc);
+        target_execCall = this->procs[ocall->pid+1];
     }
     target_execCall->call_num++;
     target_execCall->callBuff[target_execCall->call_num] = ocall;
@@ -449,15 +450,15 @@ void* surv_handleOpenCallSocket(void* surv_struct){
                                 perror("Handle misalignment of fields");
                                 break;
                             case -1:
-                                perror("missing something");
+                                perror("Ocall missing something");
                                 //Handle case
+                                openCall_print(&oCall);
                             case NOMINAL:
                                 if (openCall_filter__filter(&surv->open_filter,
                                                             &oCall)){
                                     *ret = g_ringBuffer_write(&surv->openQueue,
                                                               &oCall);
                                     int tries = 0;
-                                    openCall_print(&oCall);
                                     while( *ret && (tries<maxtries_enqueue)){
                                         *ret = g_ringBuffer_write(
                                                 &surv->openQueue,
@@ -465,7 +466,7 @@ void* surv_handleOpenCallSocket(void* surv_struct){
                                         tries++;
                                         sleep(seconds_to_wait);
                                     }
-                                    if(ret){
+                                    if(*ret){
                                         openCall_destroy(&oCall);
                                         *ret = 4;
                                         goto cleanupStringBuffers;
@@ -577,7 +578,7 @@ void* surv_handleExecCallSocket(void* surv_struct){
          | sb_init(&fields[PID],16)
          | sb_init(&fields[PPID],16)
          | sb_init(&fields[Args],128) );
-    if(ret)
+    if(*ret)
         goto cleanupStringBuffers;
 
     while(!surv->shutting_down){
@@ -586,13 +587,14 @@ void* surv_handleExecCallSocket(void* surv_struct){
             //Error using socket
             break;
         }
-        if(*ret){
+        if(*ret && FD_ISSET(rc_fd, &rfds)){
             rlen = recv(rc_fd, buf, sizeof(buf), 0);
-            *ret = NOMINAL;
+            printf("Recieved\n");
+            //*ret = NOMINAL;
         }
         else{
             //Timeout
-            break;
+            continue;
         }
 
         if(!rlen){
@@ -602,7 +604,7 @@ void* surv_handleExecCallSocket(void* surv_struct){
         //printf( "\nbuffer: \n%s\n", buf);
         *ret = sb_appendl(&sbuf, buf, rlen);
         //printf( "\nsbuffer: \n%s\n", sbuf.string);
-        if(ret) break;
+        if(*ret) break;
         for (int i=0; i<=sbuf.end_pos; i++){
             switch (sbuf.string[i]){
                 case '\n':
@@ -613,6 +615,7 @@ void* surv_handleExecCallSocket(void* surv_struct){
                                         sbuf.string+lfield_start);
                         //printf("field: %i \n cont: %s\n",
                         //        curr_field,fields[curr_field].string);
+                        //execCall* eCall = malloc(sizeof(*eCall));
                         execCall eCall;
                         switch (execCall_init(&eCall, fields+OTime,
                                             fields+Cmd, fields+PID,
@@ -639,7 +642,7 @@ void* surv_handleExecCallSocket(void* surv_struct){
                                     tries++;
                                     sleep(seconds_to_wait);
                                 }
-                                if(ret){
+                                if(*ret){
                                     execCall_destroy(&eCall);
                                     *ret = 4;
                                     goto cleanupStringBuffers;
@@ -675,8 +678,9 @@ cleanupStringBuffers:
 cleanupRecieveBuffer:
     sb_destroy(&sbuf);
 endfun:
+    printf("ExecCallSocket_offline:%i\n",*ret);
     surv->processing_execcall_socket = 0;
-    return (void*)ret;
+    return ret;
 }
 
 void* surv_shutdown(void* surv_struct){
@@ -796,7 +800,6 @@ int main(void){
                          &surv_handleOpenCallSocket, &surv);
     ret = pthread_create(&threadShutdownId, NULL,
                          &surv_shutdown, &surv);
-
     // Main loop of programm
     int dead = 0;
     int ready_calls = 0;
@@ -854,12 +857,13 @@ int main(void){
             if(g_ringBuffer_size(&surv.openQueue)){
                 if(ready_calls){
                     g_ringBuffer_read(&surv.commandQueue,(void**) &tempEcall);
-                    g_ringBuffer_read(&surv.commandQueue,(void**) &tempOcall);
+                    g_ringBuffer_read(&surv.openQueue,(void**) &tempOcall);
                     compMode = 1;
                     continue;
                 }
 
                 else{
+                    g_ringBuffer_read(&surv.openQueue,(void**) &tempOcall);
                     needs_dispatch = procindex_opencall_add(&surv.procs,
                                                             tempOcall);
                     if(needs_dispatch){
@@ -869,6 +873,7 @@ int main(void){
                 }
             }
             if(ready_calls){
+                g_ringBuffer_read(&surv.commandQueue,(void**) &tempEcall);
                 procindex_add(&surv.procs, tempEcall);
                 if(needs_dispatch){
 
@@ -910,8 +915,8 @@ int main(void){
     printf("Flush -> Done\nFinal Dispatch -> Done\n\nGOODBYE\n");
     pthread_join(threadExecId,(void**)&t_exec_ret);
     pthread_join(threadOpenId,(void**)&t_open_ret);
-    printf("ExecHandler returned: %i\n OpenHandler returned: %i\n",
-            *t_exec_ret, *t_open_ret);
+    //printf("ExecHandler returned: i\n OpenHandler returned: i\n"
+    //        /***t_exec_ret **t_open_ret*/);
     surv_destroy(&surv);
     exit(EXIT_SUCCESS);
 }
