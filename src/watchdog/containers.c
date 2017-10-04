@@ -19,6 +19,7 @@ int sb_appendl(stringBuffer* this, char* string, size_t len){
     while (this->end_pos+len >= this->size){
         char *ret = realloc(this->string,this->size*2);
         if(!ret) return 1;
+        this->string = ret;
         this->size = this->size*2;
     }
     memcpy(this->string+this->end_pos, string, len);

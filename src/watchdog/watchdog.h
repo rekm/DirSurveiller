@@ -21,12 +21,12 @@ int get_max_PID();
  *  ->inode
  */
 typedef struct {
-    struct timeval time_stamp;
     pid_t pid;
     int flag;
     char* cmdName;
     char* filepath;
     __INO_T_TYPE inode;
+    struct timeval time_stamp;
 } openCall;
 
 int openCall_init(openCall* this,
@@ -56,14 +56,14 @@ void openCall_print(openCall* this);
 
 typedef struct {
     pid_t pid;
-    int tracked;
     pid_t ppid;
-    struct timeval time_stamp;
+    int tracked;
+    int call_num;
     char *cmdName;
     char *args;
     size_t callBuff_size;
-    int call_num;
     openCall **callBuff;
+    struct timeval time_stamp;
 } execCall;
 
 
@@ -112,8 +112,8 @@ int openCall_filter__add(openCall_filter* this, const char* path);
  */
 typedef struct {
     execCall** procs;
-    size_t size;
-    size_t maxPid;
+    pid_t size;
+    pid_t maxPid;
 } procindex;
 /**
  * @brief Initialization of procindex struct
@@ -169,6 +169,7 @@ int procindex_delete(procindex* this, pid_t target_pid);
  */
 typedef struct {
     //Status
+    int killpipe_fd[2];
     int shutting_down;
     int processing_execcall_socket;
     int processing_opencall_socket;
