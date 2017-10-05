@@ -56,7 +56,9 @@ int openCall_init(openCall* this,
     // FilePath
     ret = sb_stringCpy(&this->filepath, path);
     if(ret) goto freeCmd;
+    this->flag = 0;
     this->flag = atoi(returnVal->string);
+    this->pid = 0;
     this->pid = atoi(pid->string);
     //Get inode number
     struct stat file_stat;
@@ -173,10 +175,11 @@ void void_execCallPtr_destroy(void* void_exec_ptr){
 }
 
 void execCall_print(execCall* this){
-    printf("%s-> pid: %i ppid: %i time: %li.%li\n args: %s\n tracked: %i\n",
+    printf("%s-> pid: %i ppid: %i time: %li.%li\n args: %s\n tracked: %i\n"
+           " openCalls: %i\n",
           this->cmdName, this->pid, this->ppid, this->time_stamp.tv_sec,
-          this->time_stamp.tv_usec, this->args, this->tracked);
-    for(int i=0; i<this->tracked; i++)
+          this->time_stamp.tv_usec, this->args, this->tracked, this->call_num);
+    for(int i=0; i<this->call_num; i++)
        openCall_print(this->callBuff[i]);
 }
 
@@ -326,6 +329,7 @@ int procindex_opencall_add(procindex* this, openCall* ocall){
             goto freeNewProcArgs;
         strcpy(newProc->args,"unknown");
         newProc->tracked = 0;
+        newProc->pid = 0;
         newProc->pid = ocall->pid;
         newProc->cmdName = malloc(sizeof(char)*(strlen(ocall->cmdName)+1));
         if(!newProc->cmdName)
@@ -346,6 +350,7 @@ freeNewProc:
         newProc->call_num = 0;
         procindex_add(this, newProc);
         target_execCall = this->procs[ocall->pid+1];
+
     }
     target_execCall->callBuff[target_execCall->call_num++] = ocall;
     if(!target_execCall->tracked){
@@ -534,7 +539,7 @@ void* surv_handleOpenCallSocket(void* surv_struct){
                                 zfree(&oCall);
                                 break;
                             case -1:
-                                perror("Ocall missing something");
+                                //perror("Ocall missing something");
                                 //Handle case
                                 //openCall_print(oCall);
                             case NOMINAL:
@@ -727,7 +732,7 @@ void* surv_handleExecCallSocket(void* surv_struct){
                                 *ret = g_ringBuffer_write(&surv->commandQueue,
                                                           eCall);
                                 int tries = 0;
-                                execCall_print(eCall);
+                                //execCall_print(eCall);
                                 fflush(stdout);
                                 while( *ret && (tries<maxtries_enqueue)){
                                     *ret = g_ringBuffer_write(
@@ -909,7 +914,6 @@ int main(void){
     int ecall_first = 0;
     int compMode = 0;
     int has_next = 0;
-    int needs_dispatch =0;
     int dispatch_batch = 0;
     size_t counter = 1;
     execCall* tempEcall;
@@ -917,11 +921,10 @@ int main(void){
     execCall* dispatch_call;
     // Somewhat convoluted logic determining flow control
 
-
     while(!dead){
         //Dispatch
         //Sleep to keep CPU Usage sane
-        if(!(counter % 128))
+        if(!(counter % 256))
            sleep(1);
         if(counter >= 424242)
            surv.shutting_down = 1;
@@ -931,9 +934,12 @@ int main(void){
                                    &tempOcall->time_stamp, <=);
             if(ecall_first){
                 surv_addExecCall(&surv, tempEcall);
+                tempEcall = NULL;
             }
-            else
+            else{
                 procindex_opencall_add(&surv.procs, tempOcall);
+                tempOcall = NULL;
+            }
             has_next =
               ( ecall_first && g_ringBuffer_size(&surv.commandQueue))
               || (!ecall_first && g_ringBuffer_size(&surv.openQueue));
@@ -945,11 +951,15 @@ int main(void){
                     g_ringBuffer_read(&surv.openQueue, ((void**)tempOcall));
             }
             else{
-                if(!ecall_first)
+                if(!ecall_first){
+                    //execCall_print(tempEcall);
                     surv_addExecCall(&surv, tempEcall);
+                    tempEcall=NULL;
+                }
                 else{
+                    //openCall_print(tempOcall);
                     ret = procindex_opencall_add(&surv.procs, tempOcall);
-
+                    tempOcall=NULL;
                 }
                 ready_calls = 0;
                 compMode = 0;
@@ -963,14 +973,17 @@ int main(void){
                 if(ready_calls){
                     g_ringBuffer_read(&surv.commandQueue,(void**) &tempEcall);
                     g_ringBuffer_read(&surv.openQueue,(void**) &tempOcall);
+                    execCall_print(tempEcall);
+                    openCall_print(tempOcall);
                     compMode = 1;
                     continue;
                 }
 
                 else{
                     g_ringBuffer_read(&surv.openQueue,(void**) &tempOcall);
-                    needs_dispatch = procindex_opencall_add(&surv.procs,
-                                                            tempOcall);
+                    //openCall_print(tempOcall);
+                    procindex_opencall_add(&surv.procs,
+                                           tempOcall);
                     ready_calls = 0;
                 }
             }
@@ -1001,6 +1014,7 @@ int main(void){
                 execCall_print(dispatch_call);
                 printf("\n");
                 execCall_destroy(dispatch_call);
+                zfree(&dispatch_call);
             }
             printf("\nlast_dispatch:%i;oQueue:%i;eQueue:%i\n%s%s\n%s%s\n",
                     dispatch_batch,
