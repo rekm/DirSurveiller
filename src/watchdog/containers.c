@@ -6,13 +6,12 @@
 
 
 int sb_init(stringBuffer* this, size_t size){
-    this->string = malloc(sizeof(char)*size);
+    this->string = calloc(size, sizeof(char));
     if (!this->string | !size)
         return 1;
     this->size = 0;
     this->size = size;
     this->end_pos = 0;
-    this->string[0] = '\0';
     return 0;
 }
 

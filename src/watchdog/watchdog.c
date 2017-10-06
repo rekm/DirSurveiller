@@ -251,7 +251,7 @@ int procindex_add(procindex* this, execCall* call){
 
     while (call->pid+1 > this->size){
         this->size =
-               (this->size*2 <= this->maxPid) ? this->size*2 : this->maxPid;
+               (this->size*2 <= this->maxPid+1) ? this->size*2 : this->maxPid+1;
         execCall** newExec = realloc(this->procs,
                                      this->size*sizeof(*this->procs));
         if(!newExec){
@@ -293,7 +293,7 @@ int procindex_opencall_add(procindex* this, openCall* ocall){
     //openCall_print(ocall);
     while(this->size < ocall->pid+1){
         pid_t newSize = this->size*2;
-        newSize = (newSize <= this->maxPid) ? newSize : this->maxPid;
+        newSize = (newSize <= this->maxPid+1) ? newSize : this->maxPid+1;
         execCall** newProcs = realloc(this->procs,
                                       sizeof(*this->procs)*newSize);
         if(!newProcs){
@@ -324,6 +324,7 @@ int procindex_opencall_add(procindex* this, openCall* ocall){
     else{
         //Setup dummy process
         execCall* newProc = malloc(sizeof(*newProc));
+        *newProc = (execCall) {0};
         if(!newProc)
             goto freeNewProc;
         newProc->ppid = 0; //Unknown parent
@@ -431,11 +432,15 @@ void* surv_handleOpenCallSocket(void* surv_struct){
      * more dynamic buffer with functions that
      * make usage more enjoyable
      */
-    stringBuffer sbuf;
+    stringBuffer sbuf = (stringBuffer) {0};
+
     int field_num = 5; // Number of fields that need parsing
     enum FieldDesc { OTime, Cmd, PID, Rval, Path};
     // Array of dynamic StringBuffers for fields
     stringBuffer fields[field_num];
+    //for(int i = 0; i<field_num; i++)
+    //    fields[i] = (stringBuffer) {0};
+
     int rc_fd; // recieve file descriptor
     ssize_t rlen = 0;
     struct sockaddr_un addr;
@@ -527,6 +532,7 @@ void* surv_handleOpenCallSocket(void* surv_struct){
                         *ret = sb_append(fields+curr_field,
                                         sbuf.string+lfield_start);
                         openCall* oCall = malloc(sizeof(*oCall));
+                        *oCall = (openCall) {0};
                         switch (openCall_init(oCall, fields+OTime,
                                             fields+Cmd, fields+PID,
                                             fields+Rval,fields+Path)){
@@ -616,7 +622,7 @@ void* surv_handleExecCallSocket(void* surv_struct){
      * more dynamic buffer with functions that
      * make usage more enjoyable
      */
-    stringBuffer sbuf;
+    stringBuffer sbuf = (stringBuffer) {0};
     int field_num = 5; // Number of fields that need parsing
     enum FieldDesc { OTime, Cmd, PID, PPID, Args};
     // Array of dynamic StringBuffers for fields
@@ -848,7 +854,7 @@ void surv_check_proc_vitals(surveiller* this){
             }
             else if(needsDispatch){
                 execCall_destroy(currProc);
-                zfree(&currProc);
+                zfree(&this->procs.procs[i]);
             }
         }
     }
@@ -924,6 +930,7 @@ int main(void){
     pthread_t threadOpenId;
     int* t_open_ret;
     pthread_t threadShutdownId;
+    int* t_shutdown_ret;
     //t_exec_ret = surv_handleExecCallSocket(&surv);
     ret = pthread_create(&threadExecId, NULL,
                          &surv_handleExecCallSocket, &surv);
@@ -952,9 +959,9 @@ int main(void){
         if(counter >= 424242)
            surv.shutting_down = 1;
         //Check if processes are dead if you haven't got anything better to do
-        if(!(counter % 1024)
-           && g_ringBuffer_empty(&surv.commandQueue)
-           && g_ringBuffer_empty(&surv.openQueue))
+        if(!(counter % 1))
+        //   && g_ringBuffer_empty(&surv.commandQueue)
+        //   && g_ringBuffer_empty(&surv.openQueue))
                 surv_check_proc_vitals(&surv);
         // Moving through and comparing timestamps on both Queues
         if(compMode){
@@ -1058,9 +1065,11 @@ int main(void){
     printf("Flush -> Done\nFinal Dispatch -> Done\n\nGOODBYE\n");
     pthread_join(threadExecId,(void**)&t_exec_ret);
     pthread_join(threadOpenId,(void**)&t_open_ret);
+    pthread_join(threadShutdownId,(void**)&t_shutdown_ret);
     printf("ExecHandler returned: %i\nOpenHandler returned: %i\n",
             *t_exec_ret, *t_open_ret);
     surv_destroy(&surv);
+    zfree(&t_shutdown_ret);
     zfree(&t_exec_ret);
     zfree(&t_open_ret);
     exit(EXIT_SUCCESS);
