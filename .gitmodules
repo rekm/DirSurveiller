@@ -1,0 +1,3 @@
+[submodule "libart"]
+	path = libart
+	url = https://github.com/rekm/libart.git
