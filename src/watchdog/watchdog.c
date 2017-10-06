@@ -828,7 +828,7 @@ int surv_addExecCall(surveiller* this, execCall* ecall){
 
 void surv_flush_procindex(surveiller* this){
     execCall* currProc;
-    for(size_t i=0; i<this->procs.size; i++){
+    for(size_t i=0; i<this->procs.size-1; i++){
         currProc = procindex_retrieve(&this->procs, i);
         if(currProc && currProc->tracked){
             g_ringBuffer_write(&this->dispatchQueue, currProc);
