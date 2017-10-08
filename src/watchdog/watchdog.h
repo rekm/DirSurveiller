@@ -1,6 +1,7 @@
 #ifndef _WATCHDOG_H
 #define _WATCHDOG_H
 
+#include <pthread.h>
 #include <sys/types.h>
 #include <sys/time.h>
 
@@ -174,6 +175,8 @@ typedef struct {
     int processing_execcall_socket;
     int processing_opencall_socket;
     pid_t ownPID;
+    char status_msg[200];
+    pthread_t* shutdownThreadId;
     const char* opencall_socketaddr;
     const char* execcall_socketaddr;
     const char* ctl_socketaddr;
@@ -198,7 +201,8 @@ typedef struct {
  */
 int surv_init(surveiller* this, const char* opencall_socketaddr,
               const char* execcall_socketaddr,
-              const char* ctl_socketaddr);
+              const char* ctl_socketaddr,
+              pthread_t* shutdownThread);
 void surv_destroy(surveiller* this);
 
 int surv_check_running(surveiller* this);

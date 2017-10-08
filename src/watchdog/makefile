@@ -5,7 +5,7 @@ DEPS2 = containers.h definitions.h
 OBJ = watchdog.o containers.o ../dependencies/libart/src/art.o definitions.o
 OBJ2 = tests.o containers.o ../dependencies/libart/src/art.o definitions.o
 
-all: watchdog watchdog_tests
+all: watchdog watchdog_ctrl watchdog_tests
 
 %.o: %.c $(DEPS)
 		$(CC) -c -o $@ $< $(CFLAGS)
@@ -18,3 +18,6 @@ watchdog: $(OBJ)
 
 watchdog_tests: $(OBJ2)
 		gcc -o $@ $^ $(CFLAGS)
+
+watchdog_ctrl: watchdog_ctrl.o
+		gcc watchdog_ctrl.c -o watchdog_ctrl

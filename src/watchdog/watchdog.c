@@ -2,7 +2,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
-#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -379,12 +378,15 @@ execCall* procindex_retrieve(procindex* this, pid_t target_pid){
 
 int surv_init(surveiller* this, const char* opencall_socketaddr,
               const char* execcall_socketaddr,
-              const char* ctl_socketaddr){
+              const char* ctl_socketaddr,
+              pthread_t* shutdownThread){
     int ret = NOMINAL;
+    sprintf(this->status_msg,"starting up...\n");
     this->opencall_socketaddr = opencall_socketaddr;
     this->execcall_socketaddr = execcall_socketaddr;
     this->ctl_socketaddr = ctl_socketaddr;
     this->ownPID = getpid();
+    this->shutdownThreadId = shutdownThread;
     this->shutting_down = 0;
     this->processing_execcall_socket = 0;
     this->processing_opencall_socket = 0;
@@ -401,7 +403,7 @@ int surv_init(surveiller* this, const char* opencall_socketaddr,
 
     ret = g_ringBuffer_init(&this->dispatchQueue, sizeof(execCall*));
     if (pipe(this->killpipe_fd) == -1) {
-        perror("pipe");
+        perror("could not create kill_pipe");
         ret = -1;
     }
     return ret;
@@ -860,6 +862,94 @@ void surv_check_proc_vitals(surveiller* this){
     }
 }
 
+
+
+void* surv_handleAccess(void* void_surv_struct){
+    int* ret = malloc(sizeof(*ret));
+    *ret = NOMINAL;
+    surveiller* surv = (surveiller*) void_surv_struct;
+    int rc_fd; // recieve file descriptor
+    int newcon_fd;
+    ssize_t rlen = 0;
+    struct sockaddr_un addr;
+    fd_set op_sockets;
+    fd_set rd_sockets;
+    int fd_size;
+    char buf[256]; //buffer for recieve call
+
+    if ( (rc_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1){
+        *ret = 2;
+        goto endfun;
+    }
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    if(*surv->execcall_socketaddr == '\0'){
+        *addr.sun_path = '\0';
+        strncpy( addr.sun_path + 1,
+                surv->ctl_socketaddr + 1, sizeof(addr.sun_path) - 2);
+    } else {
+        strncpy(addr.sun_path,
+                surv->ctl_socketaddr, sizeof(addr.sun_path) -1);
+    }
+    unlink(surv->ctl_socketaddr);
+    int reuse = 1;
+    if(setsockopt(rc_fd, SOL_SOCKET, SO_REUSEADDR,
+                   &reuse, sizeof(reuse))){
+        fprintf(stderr, "Reuse failed with code %i\n",errno);
+        *ret = -1;
+        goto endfun;
+    }
+
+    if (bind(rc_fd, (struct sockaddr*)&addr,
+             sizeof(addr)) == -1) {
+        perror( "bind of open_address failed");
+        *ret = -1;
+        goto endfun;
+    }
+
+    if (listen(rc_fd, 10) == -1) {
+       perror( "Can't set listen mode in open socket");
+       *ret = -1;
+       goto endfun;
+    }
+    fd_size = getdtablesize();
+    FD_ZERO(&op_sockets);
+    FD_SET(rc_fd, &op_sockets);
+    FD_SET(surv->killpipe_fd[0], &op_sockets);
+
+    while(!surv->shutting_down){
+        rd_sockets = op_sockets;
+        *ret = select(fd_size, &rd_sockets, NULL, NULL, NULL);
+
+        if(FD_ISSET(rc_fd, &rd_sockets)){
+            /*Check if we need to add this new connection
+             *to the set of open sockets */
+            newcon_fd = accept(rc_fd, NULL, NULL);
+            if(newcon_fd >= 0)
+                FD_SET(newcon_fd, &op_sockets);
+            continue;
+        }
+        for(int i = 0; i<fd_size; i++){
+            if( i!=rc_fd && FD_ISSET(i, &rd_sockets)){
+                rlen = read(i, buf, sizeof(buf));
+                if(!rlen){
+                    close(i);
+                    FD_CLR(i,&op_sockets);
+                }
+                else{
+                    char* answer = "Request recieved!";
+                    write(i, answer, strlen(answer)+1);
+                }
+            }
+        }
+    }
+    close(rc_fd);
+endfun:
+    return ret;
+}
+
+
 /**
  * Gets max pid from proc pseudo filesystem under linux
  */
@@ -902,11 +992,23 @@ int main(void){
     char* opensocket_addr = "/tmp/opentrace_opencalls";
     char* execsocket_addr = "/tmp/opentrace_execcalls";
     char* ctlsocket_addr = "/tmp/opentrace_ctl.socket";
+
+    //Preparing thread ids and return values//
+    pthread_t threadExecId;
+    int* t_exec_ret;
+    pthread_t threadOpenId;
+    int* t_open_ret;
+    pthread_t threadShutdownId;
+    int* t_shutdown_ret;
+    pthread_t threadControlId;
+    int* t_ctrl_ret;
+    // Initializing surveiller struct //
     surveiller surv;
     ret = surv_init(&surv,
                     opensocket_addr,
                     execsocket_addr,
-                    ctlsocket_addr);
+                    ctlsocket_addr,
+                    &threadShutdownId);
     if(ret)
         exit(EXIT_FAILURE);
 
@@ -920,17 +1022,10 @@ int main(void){
     sigemptyset(&signals2block);
     sigaddset(&signals2block, SIGTERM);
     sigaddset(&signals2block, SIGINT);
-    //sigprocmask(SIG_BLOCK, &signals2block, NULL);
     pthread_sigmask(SIG_BLOCK, &signals2block, NULL);
 
-    // Setting up Threads //
+    // Creating Threads //
 
-    pthread_t threadExecId;
-    int* t_exec_ret;
-    pthread_t threadOpenId;
-    int* t_open_ret;
-    pthread_t threadShutdownId;
-    int* t_shutdown_ret;
     //t_exec_ret = surv_handleExecCallSocket(&surv);
     ret = pthread_create(&threadExecId, NULL,
                          &surv_handleExecCallSocket, &surv);
@@ -938,6 +1033,8 @@ int main(void){
                          &surv_handleOpenCallSocket, &surv);
     ret = pthread_create(&threadShutdownId, NULL,
                          &surv_shutdown, &surv);
+    ret = pthread_create(&threadControlId, NULL,
+                         &surv_handleAccess, &surv);
     // Main loop of programm
     int dead = 0;
     int ready_calls = 0;
@@ -959,7 +1056,7 @@ int main(void){
         if(counter >= 424242)
            surv.shutting_down = 1;
         //Check if processes are dead if you haven't got anything better to do
-        if(!(counter % 1))
+        if(!(counter % 1024))
         //   && g_ringBuffer_empty(&surv.commandQueue)
         //   && g_ringBuffer_empty(&surv.openQueue))
                 surv_check_proc_vitals(&surv);
@@ -1051,14 +1148,15 @@ int main(void){
                 execCall_destroy(dispatch_call);
                 zfree(&dispatch_call);
             }
-            printf("\nlast_dispatch:%i;oQueue:%i;eQueue:%i\n%s%s\n%s%s\n",
+            sprintf(surv.status_msg,
+                    "\nlast_dispatch:%i;oQueue:%i;eQueue:%i\n%s%s\n%s%s\n",
                     dispatch_batch,
-                   g_ringBuffer_size(&surv.openQueue),
-                   g_ringBuffer_size(&surv.commandQueue),
-                   "openSockethandler:",
-                   surv.processing_opencall_socket ? "running":"exited",
-                   "execSockethandler:",
-                   surv.processing_execcall_socket ? "running":"exited" );
+                    g_ringBuffer_size(&surv.openQueue),
+                    g_ringBuffer_size(&surv.commandQueue),
+                    "openSockethandler:",
+                    surv.processing_opencall_socket ? "running":"exited",
+                    "execSockethandler:",
+                    surv.processing_execcall_socket ? "running":"exited" );
         }
         counter++;
     }
@@ -1066,6 +1164,7 @@ int main(void){
     pthread_join(threadExecId,(void**)&t_exec_ret);
     pthread_join(threadOpenId,(void**)&t_open_ret);
     pthread_join(threadShutdownId,(void**)&t_shutdown_ret);
+    pthread_join(threadControlId,(void**)&t_ctrl_ret);
     printf("ExecHandler returned: %i\nOpenHandler returned: %i\n",
             *t_exec_ret, *t_open_ret);
     surv_destroy(&surv);
