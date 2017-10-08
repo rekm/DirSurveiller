@@ -108,6 +108,7 @@ int execCall_init(execCall* this,
     this->tracked = 0;
     int ret = 0;
     // timeStamp
+    this->deadness = 0;
     int timedot = 0;
     for(; timedot<execTimeStamp->end_pos; timedot++){
        if(execTimeStamp->string[timedot] == '.'){
@@ -854,10 +855,13 @@ void surv_check_proc_vitals(surveiller* this){
                 g_ringBuffer_write(&this->dispatchQueue, currProc);
                 this->procs.procs[i] = NULL;
             }
-            else if(needsDispatch){
+            else if(needsDispatch && (currProc->deadness > 2)){
                 execCall_destroy(currProc);
                 zfree(&this->procs.procs[i]);
             }
+            else if(needsDispatch)
+                currProc->deadness++;
+
         }
     }
 }
@@ -1171,5 +1175,6 @@ int main(void){
     zfree(&t_shutdown_ret);
     zfree(&t_exec_ret);
     zfree(&t_open_ret);
+    zfree(&t_ctrl_ret);
     exit(EXIT_SUCCESS);
 }

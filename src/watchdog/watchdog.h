@@ -58,6 +58,7 @@ void openCall_print(openCall* this);
 typedef struct {
     pid_t pid;
     pid_t ppid;
+    int deadness;
     int tracked;
     int call_num;
     char *cmdName;
