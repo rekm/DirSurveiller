@@ -14,7 +14,7 @@ Development:
 
 Get all of the project including submodules
 
-  git clone --recursive https://github.com/rekm/DirSurveiller.git
+       git clone --recursive https://github.com/rekm/DirSurveiller.git
 
 Currently there are makefiles strewn about.
 If you run make in
@@ -58,12 +58,16 @@ bashtrace_wrapper
 
 A wrapper program that is used to wire a random process into the socket architecture.
 
+      $ ./bashtrace_wrapper <program>
+
+program standard output -> openCallSocket 
+
+program standard error  -> execCallSocket
+ 
+Example:
+
       $ ./bashtrace_wrapper sudo bash bashtrace.sh
-
-StandardOutput -> openCallSocket
-
-StandardError  -> execCallSocket
-
+      
 
 
 
