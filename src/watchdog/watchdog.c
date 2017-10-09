@@ -697,7 +697,7 @@ void* surv_handleExecCallSocket(void* surv_struct){
         }
         if(*ret /*&& FD_ISSET(rc_fd, &rfds)*/){
             rlen = recv(rc_fd, buf, sizeof(buf), 0);
-            printf("Recieved\n");
+            debug_print("%s\n","Recieved");
             //*ret = NOMINAL;
         }
         else{
