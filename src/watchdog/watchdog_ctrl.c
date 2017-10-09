@@ -143,6 +143,7 @@ int main (int argc, char** argv){
     //socket setup
     struct sockaddr_un addr;
     char buf[200];
+    char request[300];
     int so_fd;
     if( (so_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
     {
@@ -186,7 +187,7 @@ int main (int argc, char** argv){
     }
     if(args.status)
     {
-        char* status_request = "get_status";
+        char* status_request = "get_status$";
         if (write(so_fd, status_request, strlen(status_request)+1)<0)
         {
             perror("Error communicating with deamon");
@@ -196,6 +197,51 @@ int main (int argc, char** argv){
         {
             read(so_fd, buf, sizeof(buf));
             printf("Watchdog Daemon replied: Woof\n%s\n", buf);
+        }
+    }
+    if(args.stop)
+    {
+        sprintf(request, "shutdown$");
+        if (write(so_fd, request, strlen(request)+1)<0)
+        {
+            perror("Coudn't reach watchdog");
+            goto disconnect_socket;
+        }
+        else
+        {
+            read(so_fd, buf, sizeof(buf));
+            printf("Watchdog Daemon replied: Woof\n%s\n", buf);
+            goto disconnect_socket;
+        }
+    }
+    if(args.add_file[0])
+    {
+        sprintf(request, "add_filter$%s",args.add_file);
+        if (write(so_fd, request, strlen(request)+1)<0)
+        {
+            perror("Coudn't reach watchdog");
+            goto disconnect_socket;
+        }
+        else
+        {
+            read(so_fd, buf, sizeof(buf));
+            printf("Watchdog Daemon replied: Woof\n%s\n", buf);
+            goto disconnect_socket;
+        }
+    }
+    if(args.add_file[0])
+    {
+        sprintf(request, "remove_filter$%s",args.remove_file);
+        if (write(so_fd, request, strlen(request)+1)<0)
+        {
+            perror("Coudn't reach watchdog");
+            goto disconnect_socket;
+        }
+        else
+        {
+            read(so_fd, buf, sizeof(buf));
+            printf("Watchdog Daemon replied: Woof\n%s\n", buf);
+            goto disconnect_socket;
         }
     }
 

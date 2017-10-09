@@ -690,7 +690,6 @@ void* surv_handleExecCallSocket(void* surv_struct){
         goto cleanupStringBuffers;
 
     while(!surv->shutting_down){
-        printf("Waiting for execCall!\n");
         *ret = select(rc_fd+2, &rfds, NULL, NULL, NULL);
         if(*ret < 0){
             //Error using socket
@@ -868,6 +867,68 @@ void surv_check_proc_vitals(surveiller* this){
 
 
 
+void surv_handleRequest(surveiller* this, char* request, char* answer){
+    int ret = NOMINAL;
+    char* command = strtok(request,"$");
+    char* args = strtok(NULL,"$");
+    if(!strcmp(command, "shutdown")){
+        if(!this->shutting_down){
+            ret = pthread_kill(*this->shutdownThreadId, SIGINT);
+            if(ret){
+                sprintf(answer,
+                        "tried signaling termination and failed!\n"
+                        "pthread_kill returned: %i\n", ret);
+            }
+            else
+                sprintf(answer,"shutting watchdog down...\n");
+        }
+        else
+            sprintf(answer,"already in the process of shutting down!\n");
+    }
+    else if(!strcmp(command, "get_status")){
+        sprintf(answer,"%s",this->status_msg);
+    }
+    else if(!strcmp(command, "add_filter")){
+        if(args){
+            ret = openCall_filter__add(&this->open_filter, args);
+            if(ret){
+               sprintf(answer, "Error adding\n %s\nto filter list",
+                       args);
+            }
+            else{
+                sprintf(answer, "Added\n %s\n to filter list",args);
+            }
+        }
+        else{
+           sprintf(answer, "Error: Need something to add to filter list!\n");
+           ret = 2;
+        }
+    }
+    else if(!strcmp(command, "remove_filter")){
+        if(args){
+            ret = 1;
+            if(ret){
+               sprintf(answer, "Error removing\n %s\nfrom filter list",
+                       args);
+            }
+            else{
+                sprintf(answer, "Removed\n %s\nfrom filter list", args);
+            }
+        }
+        else{
+           sprintf(answer, "Error: Need something to add to filter list!\n");
+           ret = 2;
+        }
+    }
+    else{
+        sprintf(answer, "Request not recognized!!");
+        ret = -1;
+    }
+}
+
+
+
+
 void* surv_handleAccess(void* void_surv_struct){
     int* ret = malloc(sizeof(*ret));
     *ret = NOMINAL;
@@ -880,7 +941,7 @@ void* surv_handleAccess(void* void_surv_struct){
     fd_set rd_sockets;
     int fd_size;
     char buf[256]; //buffer for recieve call
-
+    char answer[256];
     if ( (rc_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1){
         *ret = 2;
         goto endfun;
@@ -942,7 +1003,7 @@ void* surv_handleAccess(void* void_surv_struct){
                     FD_CLR(i,&op_sockets);
                 }
                 else{
-                    char* answer = "Request recieved!";
+                    surv_handleRequest(surv, buf, answer);
                     write(i, answer, strlen(answer)+1);
                 }
             }
