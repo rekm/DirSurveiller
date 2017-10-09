@@ -61,6 +61,7 @@ A wrapper program that is used to wire a random process into the socket architec
       $ ./bashtrace_wrapper sudo bash bashtrace.sh
 
 StandardOutput -> openCallSocket
+
 StandardError  -> execCallSocket
 
 
