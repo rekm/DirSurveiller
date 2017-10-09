@@ -12,7 +12,8 @@ No clear procedures exist at the moment
 Development:
 ------------
 
-Get all of the project inc
+Get all of the project including submodules
+
   git clone --recursive https://github.com/rekm/DirSurveiller.git
 
 Currently there are makefiles strewn about 
