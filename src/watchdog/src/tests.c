@@ -109,6 +109,7 @@ void gb_sb_destroy(void* sb_void){
     stringBuffer* sb = (stringBuffer*)sb_void;
     printf("did this work: %s\n",sb->string);
     sb_destroy(sb);
+    zfree(&sb);
     printf("Freeing workes\n");
 }
 
@@ -140,15 +141,43 @@ int test_grb(){
 
     return ret;
 }
+void test_grb_scope_addStuff(g_ringBuffer* gring){
+    stringBuffer* firstEntry = malloc(sizeof(*firstEntry));
+    stringBuffer* secondEntry = malloc(sizeof(*firstEntry));
+    sb_init(firstEntry, 32);
+    sb_init(secondEntry, 32);
+    sb_append(firstEntry, "FoooFooooFooo");
+    sb_append(secondEntry, "BaaarBAAR");
+    g_ringBuffer_write(gring, firstEntry);
+    //Things gotten from Queue must be freed by reciever
+    printf("Ringbuffer contains %i elements\n",g_ringBuffer_size(gring));
+    g_ringBuffer_write(gring, secondEntry);
+    printf("Ringbuffer contains %i elements\n",g_ringBuffer_size(gring));
+}
 
+
+int test_grb_scope(){
+    int ret = NOMINAL;
+    g_ringBuffer gring;
+    g_ringBuffer_init(&gring,sizeof(stringBuffer*));
+    test_grb_scope_addStuff(&gring);
+    void* voidReturnEntry;
+    ret = g_ringBuffer_read(&gring,&voidReturnEntry);
+    stringBuffer* returnEntry = (stringBuffer*)voidReturnEntry;
+    printf("First elem: %zu\n",returnEntry->size);
+    sb_destroy(returnEntry);
+    zfree(&returnEntry);
+    g_ringBuffer_destroyd(&gring, &gb_sb_destroy);
+    return ret;
+}
 
 int main(void){
-    int ret = NOMINAL;
+    //int ret = NOMINAL;
 
-    ret = test_grb();
-    printf("General RingBuffer Test: %s\n", ret ? "failed" : "succeeded");
-    ret = test_sb();
-    printf("StringBuffer Test: %s\n", ret ? "failed" : "succeeded");
-
+    //ret = test_grb();
+    //printf("General RingBuffer Test: %s\n", ret ? "failed" : "succeeded");
+    //ret = test_sb();
+    //printf("StringBuffer Test: %s\n", ret ? "failed" : "succeeded");
+    test_grb_scope();
     return EXIT_SUCCESS;
 }

@@ -5,7 +5,7 @@
 #include <sys/types.h>
 #include <sys/time.h>
 
-#include "../dependencies/libart/src/art.h"
+#include "art.h"
 #include "containers.h"
 
 #define NOMINAL 0

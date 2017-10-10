@@ -9,10 +9,10 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <DirSurveillerConfig.h>
 // Argparse code mostly copied from the argparse manual
 
-const char *argp_program_version =
-  	"watchdog_ctrl 0.0.1 ";
+const char* argp_program_version = "watchdog_ctrl " DirSurveiller_FULL_VERSION;
 const char *argp_program_bug_address =
   	"<r.w.kmiecinski@gmail.com>";
 static char doc[] =

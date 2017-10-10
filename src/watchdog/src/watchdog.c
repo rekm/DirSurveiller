@@ -12,7 +12,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include "watchdog.h"
-
+#include "DirSurveillerConfig.h"
 
 // OpenCall utils
 
@@ -1044,16 +1044,20 @@ endfun:
 
 
 
-int main(void){
+int main(int argc, char** argv){
     int max_pid;
     int ret = NOMINAL;
     max_pid = get_max_PID();
+    fprintf(stdout,"\n%s Version %d.%d\n",
+            argv[0],
+            DirSurveiller_VERSION_MAJOR,
+            DirSurveiller_VERSION_MINOR);
     if (max_pid == -1) {
         fprintf(stderr, "Could not read /proc/sys/kernel/pid_max\n");
         exit(EXIT_FAILURE);
     }
-    fprintf(stderr, "Max PID: %i\n",max_pid);
-    fprintf(stderr,"connecting to sockets: ...\n");
+    debug_print( "Max PID: %i\n",max_pid);
+    printf("connecting to sockets: ...\n");
     char* opensocket_addr = "/tmp/opentrace_opencalls";
     char* execsocket_addr = "/tmp/opentrace_execcalls";
     char* ctlsocket_addr = "/tmp/opentrace_ctl.socket";
