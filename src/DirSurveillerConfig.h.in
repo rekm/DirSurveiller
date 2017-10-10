@@ -1,0 +1,4 @@
+#define DirSurveiller_VERSION_MAJOR @DirSurveiller_VERSION_MAJOR@
+#define DirSurveiller_VERSION_MINOR @DirSurveiller_VERSION_MINOR@
+#define DirSurveiller_VERSION_PATCH @DirSurveiller_VERSION_PATCH@
+#define DirSurveiller_FULL_VERSION "@DirSurveiller_VERSION_MAJOR@.@DirSurveiller_VERSION_MINOR@.@DirSurveiller_VERSION_PATCH@"
