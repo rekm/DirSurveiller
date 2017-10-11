@@ -1,4 +1,5 @@
- Filesystem surveillance and program execution logging allowing traceback of actions
+ Filesystem surveillance, program execution logging
+ allowing traceback of events in folders 
  
  Copyright (C) 2017  René Kmiecinski 
  
