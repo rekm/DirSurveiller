@@ -14,26 +14,39 @@ Development:
 
 Get all of the project including submodules
 
-       git clone --recursive https://github.com/rekm/DirSurveiller.git
+        git clone --recursive https://github.com/rekm/DirSurveiller.git
 
-Currently there are makefiles strewn about.
-If you run make in
-  src/watchdog
-and 
-  src/opentrace 
-all relevent programs should have been compiled
+The build process is controlled via cmake
+
+1. create a build directory somewhere
+       
+        $ mkdir <path/to/name_of_build_dir> 
+
+3. change directory into the new folder
+
+        $ cd <path/to/name_of_build_dir>
+
+2. run cmake and point it to the DirSurveiller root folder 
+   (first one of the project with CMakeLists.txt in it).  
+        
+        $ cmake <path/to/root/of/project> 
+
+Alternatively Graphic cmake (for overview of configurable options):
+
+        $ ccmake <path/to/root/of/project>
+3. make 
+
+        $ make 
 
 watchdog
 --------
 
 A daemon listening on two sockets for open and execv syscalls. 
-Right now the watchdog is a client and whatever process is used to fill the server 
+Right now the watchdog daemon is the client and whatever process is used to fill the sockets 
 represents the server.  
 bashtrace_wrapper can be used as a server. It redirects the standart input and output,
 of a provided bash call, into the relevant sockets.
-
-
-
+For the moment, the server needs to be started first. 
 
 
 watchdog_ctrl
