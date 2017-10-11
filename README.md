@@ -91,7 +91,7 @@ Example:
 License      
 -------
 
-Copyright (C) 2017  René Kmiecinki
+Copyright (C) 2017  René Kmiecinski
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published
