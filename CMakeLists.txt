@@ -6,6 +6,18 @@ set (DirSurveiller_VERSION_MAJOR 0)
 set (DirSurveiller_VERSION_MINOR 0)
 set (DirSurveiller_VERSION_PATCH 1)
 
+#Create directory for logs
+set(LOG_DIR "${PROJECT_BINARY_DIR}/logs" CACHE PATH
+    "Directory where logs are stored")
+add_custom_target(build-time-make-log_dir ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${LOG_DIR})
+
+#Create database directory if it isn't already build
+set(DATABASE_DIR "${PROJECT_BINARY_DIR}/database" CACHE PATH
+    "Directory that will contain the database")
+add_custom_target(build-time-make-database_dir ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${DATABASE_DIR})
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON )
 IF( EXISTS "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json" )

@@ -2,6 +2,7 @@
 #define _WATCHDOG_H
 
 #include <pthread.h>
+#include <stdio.h>
 #include <sys/types.h>
 #include <sys/time.h>
 
@@ -175,6 +176,10 @@ typedef struct {
     int shutting_down;
     int processing_execcall_socket;
     int processing_opencall_socket;
+    FILE* mainLog_fp;
+    FILE* openCallLog_fp;
+    FILE* execCallLog_fp;
+    FILE* ctrlLog;
     pid_t ownPID;
     char status_msg[200];
     pthread_t* shutdownThreadId;

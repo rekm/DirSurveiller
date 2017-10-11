@@ -391,15 +391,44 @@ int surv_init(surveiller* this, const char* opencall_socketaddr,
     this->shutting_down = 0;
     this->processing_execcall_socket = 0;
     this->processing_opencall_socket = 0;
+
+    //Setup LOGFiles
+    this->mainLog_fp = fopen( LOG_DIR "/watchdogDaemon_mLOG", "a");
+    if(!this->mainLog_fp){
+       goto endfun;
+    }
+    this->openCallLog_fp = fopen( LOG_DIR "/watchdogDaemon_ocLOG", "a");
+    if(!this->openCallLog){
+        //LOG Message
+        goto closeMainLog;
+    }
+    this->execCallLog_fp = fopen( LOG_DIR "/watchdogDaemon_ecLOG", "a");
+    if(!this->execCallLog){
+        //LOG Message
+        goto closeOpenCallLog;
+    }
+
+    this->ctrlLog_fp = fopen( LOG_DIR "/watchdogDaemon_ctlLOG", "a");
+    if(!this->ctrlLog){
+        //LOG Message
+        goto closeExecCallLog;
+    }
     //Filter init
     ret = openCall_filter__init(&this->open_filter);
+    if(ret){
+        goto closeCtrlLog;
+    }
 
     //Process Index init
     ret = procindex_init(&this->procs, this->ownPID);
-
+    if(ret){
+        goto destroy_filter;
+    }
     //Queue init
     ret = g_ringBuffer_init(&this->commandQueue, sizeof(execCall*));
-
+    if(ret){
+        goto destroy_procindex;
+    }
     ret = g_ringBuffer_init(&this->openQueue, sizeof(openCall*));
 
     ret = g_ringBuffer_init(&this->dispatchQueue, sizeof(execCall*));
@@ -407,6 +436,21 @@ int surv_init(surveiller* this, const char* opencall_socketaddr,
         perror("could not create kill_pipe");
         ret = -1;
     }
+endfun:
+    return ret;
+
+destroy_procindex:
+    procindex_destroy(&this->procs);
+destroy_filter:
+    openCall_filter__destroy(&this->open_filter);
+closeCtrlLog:
+    fclose(this->ctrlLog);
+closeExecCallLog:
+    fclose(this->execCallLog_fp);
+closeOpenCallLog:
+    fclose(this->openCallLog_fp);
+closeMainLog:
+    fclose(this->mainLOG_fd);
     return ret;
 }
 
@@ -420,6 +464,10 @@ void surv_destroy(surveiller* this){
     //destroy OpencallFilter
     openCall_filter__destroy(&this->open_filter);
     close(this->killpipe_fd[0]);
+    fclose(this->ctrlLog);
+    fclose(this->execCallLog_fp);
+    fclose(this->openCallLog_fp);
+    fclose(this->mainLOG_fd);
 }
 
 /**
