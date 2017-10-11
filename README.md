@@ -1,5 +1,5 @@
 # DirSurveiller
-Surveills a directory on -nix systems and logs filesystem operations of processes 
+Surveills directories/files on -nix systems and logs filesystem events triggerd by processes 
 
 
 -------------
