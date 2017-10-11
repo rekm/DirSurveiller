@@ -179,7 +179,7 @@ typedef struct {
     FILE* mainLog_fp;
     FILE* openCallLog_fp;
     FILE* execCallLog_fp;
-    FILE* ctrlLog;
+    FILE* ctrlLog_fp;
     pid_t ownPID;
     char status_msg[200];
     pthread_t* shutdownThreadId;

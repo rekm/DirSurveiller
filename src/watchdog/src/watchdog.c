@@ -398,18 +398,18 @@ int surv_init(surveiller* this, const char* opencall_socketaddr,
        goto endfun;
     }
     this->openCallLog_fp = fopen( LOG_DIR "/watchdogDaemon_ocLOG", "a");
-    if(!this->openCallLog){
+    if(!this->openCallLog_fp){
         //LOG Message
         goto closeMainLog;
     }
     this->execCallLog_fp = fopen( LOG_DIR "/watchdogDaemon_ecLOG", "a");
-    if(!this->execCallLog){
+    if(!this->execCallLog_fp){
         //LOG Message
         goto closeOpenCallLog;
     }
 
     this->ctrlLog_fp = fopen( LOG_DIR "/watchdogDaemon_ctlLOG", "a");
-    if(!this->ctrlLog){
+    if(!this->ctrlLog_fp){
         //LOG Message
         goto closeExecCallLog;
     }
@@ -444,13 +444,13 @@ destroy_procindex:
 destroy_filter:
     openCall_filter__destroy(&this->open_filter);
 closeCtrlLog:
-    fclose(this->ctrlLog);
+    fclose(this->ctrlLog_fp);
 closeExecCallLog:
     fclose(this->execCallLog_fp);
 closeOpenCallLog:
     fclose(this->openCallLog_fp);
 closeMainLog:
-    fclose(this->mainLOG_fd);
+    fclose(this->mainLog_fp);
     return ret;
 }
 
@@ -464,10 +464,10 @@ void surv_destroy(surveiller* this){
     //destroy OpencallFilter
     openCall_filter__destroy(&this->open_filter);
     close(this->killpipe_fd[0]);
-    fclose(this->ctrlLog);
+    fclose(this->ctrlLog_fp);
     fclose(this->execCallLog_fp);
     fclose(this->openCallLog_fp);
-    fclose(this->mainLOG_fd);
+    fclose(this->mainLog_fp);
 }
 
 /**
