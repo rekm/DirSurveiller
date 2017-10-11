@@ -17,7 +17,7 @@ Development:
 
 Get all of the project including submodules
 
-        git clone --recursive https://github.com/rekm/DirSurveiller.git
+        $ git clone --recursive https://github.com/rekm/DirSurveiller.git
 
 The build process is controlled via cmake
 
@@ -37,6 +37,7 @@ The build process is controlled via cmake
 Alternatively Graphic cmake (for overview of configurable options):
 
         $ ccmake <path/to/root/of/project>
+
 3. make 
 
         $ make 
