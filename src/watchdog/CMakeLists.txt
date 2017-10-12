@@ -31,14 +31,13 @@ add_library(libart STATIC ${libart_SOURCES})
 target_include_directories(libart
     PUBLIC deps/libart/src)
 
+#Adding executables and setting library dependencies
 add_executable(watchdog_daemon
     src/watchdog.c)
-
 set_property(TARGET watchdog_daemon PROPERTY C_STANDARD 99)
 
 add_executable(watchdog_ctrl
     src/watchdog_ctrl.c)
-
 set_property(TARGET watchdog_ctrl PROPERTY C_STANDARD 99)
 
 target_link_libraries(watchdog_daemon
