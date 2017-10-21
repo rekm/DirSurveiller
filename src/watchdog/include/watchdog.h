@@ -172,6 +172,7 @@ int procindex_delete(procindex* this, pid_t target_pid);
  */
 typedef struct {
     //Status
+    int restart;
     int killpipe_fd[2];
     int shutting_down;
     int processing_execcall_socket;

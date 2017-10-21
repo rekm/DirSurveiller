@@ -30,19 +30,20 @@ static char args_doc[] = "...";
 static struct argp_option options[] = {
   	{"start",  's', 0,       0, "Start watchdog" },
   	{"stop",   'q', 0,       0, "Stop watchdog daemon" },
+    {"restart",'r', 0,       0, "Restart watchdog daemon"},
  	{"status", 'u', 0,       0, "Get status update from daemon"},
   	{0,0,0,0, "Manipulating Watchlist:" },
   	{"add",    'a', "FILE/DIR",  OPTION_ARG_OPTIONAL,
         "Add FILE or DIRECTORY to watchlist" },
-  	{"remove", 'r', "FILE/DIR",  OPTION_ARG_OPTIONAL,
-        "Remove FILE or DIRECTORY to watchlist" },
+  	{"delete", 'd', "FILE/DIR",  OPTION_ARG_OPTIONAL,
+        "Delete FILE or DIRECTORY from watchlist" },
   	{"abort",    OPT_ABORT, 0, 0, "Abort before showing any output"},
 	{ 0 }
 };
 
 struct arguments
 {
-  	int start, stop, status, abort;
+  	int start, stop, status, abort, restart;
   	char *add_file;
 	char *remove_file;    /* file arg to ‘--output’ */
 };
@@ -59,13 +60,16 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state){
 		case 'q':
 		  	arguments->stop = 1;
 		  	break;
-		case 'u':
+        case 'r':
+            arguments->restart = 1;
+            break;
+        case 'u':
 		  	arguments->status = 1;
 		  	break;
 		case 'a':
 		  	realpath(arg ? arg : "./", arguments->add_file);
 		  	break;
-		case 'r':
+		case 'd':
 		  	realpath(arg ? arg : "./", arguments->remove_file);
 		  	break;
 		case OPT_ABORT:
@@ -126,19 +130,22 @@ int main (int argc, char** argv){
     args.stop = 0;
     args.status = 0;
     args.abort = 0;
-
+    args.restart = 0;
     argp_parse (&argp, argc, argv, 0, 0, &args);
 
     if(args.abort)
         error (10, 0, "ABORTED");
     if(1 < (args.start + args.stop))
         error (11, 0, "START and STOP exclude eachother");
+    if(args.stop && args.restart)
+        error (11, 0, "Cannot STOP and RESTART at the same time");
     if(!(args.stop || args.start || args.status ||
-         args.add_file[0] || args.remove_file[0]))
+         args.add_file[0] || args.remove_file[0] || args.restart))
     {
         fprintf(stderr, "No options provided! Will check daemon status\n\n");
         args.status = 1;
     }
+
 
     //socket setup
     struct sockaddr_un addr;
@@ -202,6 +209,21 @@ int main (int argc, char** argv){
     if(args.stop)
     {
         sprintf(request, "shutdown$");
+        if (write(so_fd, request, strlen(request)+1)<0)
+        {
+            perror("Coudn't reach watchdog");
+            goto disconnect_socket;
+        }
+        else
+        {
+            read(so_fd, buf, sizeof(buf));
+            printf("Watchdog Daemon replied: Woof\n%s\n", buf);
+            goto disconnect_socket;
+        }
+    }
+    if(args.restart)
+    {
+        sprintf(request, "restart$");
         if (write(so_fd, request, strlen(request)+1)<0)
         {
             perror("Coudn't reach watchdog");

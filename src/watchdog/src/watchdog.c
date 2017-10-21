@@ -389,6 +389,7 @@ int surv_init(surveiller* this, const char* opencall_socketaddr,
     this->ownPID = getpid();
     this->shutdownThreadId = shutdownThread;
     this->shutting_down = 0;
+    this->restart=0;
     this->processing_execcall_socket = 0;
     this->processing_opencall_socket = 0;
 
@@ -933,6 +934,21 @@ void surv_handleRequest(surveiller* this, char* request, char* answer){
         else
             sprintf(answer,"already in the process of shutting down!\n");
     }
+    else if(!strcmp(command, "restart")){
+        if(!this->shutting_down){
+            this->restart = 1;
+            ret = pthread_kill(*this->shutdownThreadId, SIGINT);
+            if(ret){
+                sprintf(answer,
+                        "tried signaling termination and failed!\n"
+                        "pthread_kill returned: %i\n", ret);
+            }
+            else
+                sprintf(answer,"restarting now...\n");
+        }
+        else
+            sprintf(answer,"already in the process of shutting down!\n");
+    }
     else if(!strcmp(command, "get_status")){
         sprintf(answer,"%s",this->status_msg);
     }
@@ -1154,6 +1170,7 @@ int main(int argc, char** argv){
                          &surv_handleAccess, &surv);
     // Main loop of programm
     int dead = 0;
+    int restart=0;
     int ready_calls = 0;
     int ecall_first = 0;
     int compMode = 0;
@@ -1266,14 +1283,20 @@ int main(int argc, char** argv){
                 zfree(&dispatch_call);
             }
             sprintf(surv.status_msg,
-                    "\nlast_dispatch:%i;oQueue:%i;eQueue:%i\n%s%s\n%s%s\n",
+                    "\nlast_dispatch:%i;oQueue:%i;eQueue:"
+                    "%i\n%s%s\n%s%s\n%s\n",
                     dispatch_batch,
                     g_ringBuffer_size(&surv.openQueue),
                     g_ringBuffer_size(&surv.commandQueue),
                     "openSockethandler:",
                     surv.processing_opencall_socket ? "running":"exited",
                     "execSockethandler:",
-                    surv.processing_execcall_socket ? "running":"exited" );
+                    surv.processing_execcall_socket ? "running":"exited",
+                    !(surv.processing_execcall_socket
+                      && surv.processing_opencall_socket)?
+                        "\nIf you are sure that the server is running,\n"
+                        "try restarting the watchdog daemon daemon" : ""
+                   );
         }
         counter++;
     }
@@ -1284,10 +1307,15 @@ int main(int argc, char** argv){
     pthread_join(threadControlId,(void**)&t_ctrl_ret);
     printf("ExecHandler returned: %i\nOpenHandler returned: %i\n",
             *t_exec_ret, *t_open_ret);
+    if(surv.restart){
+        restart = 1;
+    }
     surv_destroy(&surv);
     zfree(&t_shutdown_ret);
     zfree(&t_exec_ret);
     zfree(&t_open_ret);
     zfree(&t_ctrl_ret);
+    if(restart)
+        execvp(argv[0], argv);
     exit(EXIT_SUCCESS);
 }
