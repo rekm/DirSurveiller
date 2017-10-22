@@ -1,6 +1,7 @@
 #ifndef _DEFINITIONS_H
 #define _DEFINITIONS_H
 
+#include <stdio.h>
 #ifndef DEBUG
     #define DEBUG 0
 #endif
@@ -13,6 +14,6 @@
 #define debug_print(fmt, ...) \
             do { if (DEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0)
 
-void log_print(int* file, char* fmt,...);
+void log_print(FILE* file, char* fmt,...);
 
 #endif

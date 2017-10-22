@@ -6,6 +6,19 @@ project(watchdog)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
+###### Definition Library  ######
+
+set(deflib_SOURCES
+    src/definitions.c)
+
+#Generate the static library from the library sources
+add_library(def_library STATIC ${deflib_SOURCES})
+
+set_property(TARGET def_library PROPERTY C_STANDARD 99)
+
+target_include_directories(def_library
+    PUBLIC include
+)
 ###### Containers Library  ######
 
 set(library_SOURCES
@@ -32,6 +45,7 @@ target_include_directories(libart
     PUBLIC deps/libart/src)
 
 #Adding executables and setting library dependencies
+
 add_executable(watchdog_daemon
     src/watchdog.c)
 set_property(TARGET watchdog_daemon PROPERTY C_STANDARD 99)
@@ -41,6 +55,7 @@ add_executable(watchdog_ctrl
 set_property(TARGET watchdog_ctrl PROPERTY C_STANDARD 99)
 
 target_link_libraries(watchdog_daemon
+    PRIVATE def_library
     PRIVATE containers_library
     PRIVATE libart
     Threads::Threads)

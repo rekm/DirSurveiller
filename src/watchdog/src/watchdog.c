@@ -1,5 +1,6 @@
 #define _BSD_SOURCE
 #define _POSIX_C_SOURCE 200809L
+#include "definitions.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -498,6 +499,7 @@ void* surv_handleOpenCallSocket(void* surv_struct){
     struct sockaddr_un addr;
 
     surveiller* surv = (surveiller*) surv_struct;
+    log_print(surv->openCallLog_fp,"starting parser");
     if ( (rc_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1){
         *ret = 2;
         goto endfun;
@@ -570,7 +572,7 @@ void* surv_handleOpenCallSocket(void* surv_struct){
         }
 
         if(!rlen){
-            printf("No longer recieving data\n");
+            log_print(surv->openCallLog_fp,"No longer recieving data\n");
             break;
         }
         *ret = sb_appendl(&sbuf, buf,rlen);
@@ -590,12 +592,14 @@ void* surv_handleOpenCallSocket(void* surv_struct){
                                             fields+Rval,fields+Path)){
                             case 1:
                                 //Memory error => Panic
-                                perror("ToDo handle memory Error");
+                                log_print(surv->openCallLog_fp,
+                                         "Encountered Memory Error");
                                 openCall_destroy(oCall);
                                 zfree(&oCall);
                                 break;
                             case 2:
-                                perror("Handle misalignment of fields");
+                                log_print(surv->openCallLog_fp,
+                                          "Misaligned fields in parse");
                                 openCall_destroy(oCall);
                                 zfree(&oCall);
                                 break;
@@ -621,7 +625,6 @@ void* surv_handleOpenCallSocket(void* surv_struct){
                                         *ret = 4;
                                         goto cleanupStringBuffers;
                                     }
-                                    //openCall_print(oCall);
                                 }
                                 else{
                                     openCall_destroy(oCall);
@@ -652,7 +655,8 @@ cleanupStringBuffers:
     close(rc_fd);
 cleanupRecieveBuffer:
     sb_destroy(&sbuf);
-
+    log_print(surv->openCallLog_fp,"Shutting down parse thread\n"
+              "Return Value: %i\n", *ret);
 endfun:
     surv->processing_opencall_socket = 0;
     return ret;
@@ -685,6 +689,7 @@ void* surv_handleExecCallSocket(void* surv_struct){
 
 
     surveiller* surv = (surveiller*) surv_struct;
+    log_print(surv->execCallLog_fp,"starting parser");
     if ( (rc_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1){
         *ret = 2;
         goto endfun;
@@ -755,13 +760,13 @@ void* surv_handleExecCallSocket(void* surv_struct){
         }
 
         if(!rlen){
-            printf("No longer recieving data\n");
+            log_print(surv->execCallLog_fp,"No longer recieving data");
             break;
         }
-        //printf( "\nbuffer: \n%s\n", buf);
+        //log_print( "\nbuffer: \n%s\n", buf);
         //fflush_unlocked(stdout);
         *ret = sb_appendl(&sbuf, buf, rlen);
-        //printf( "\nsbuffer: \n%s\n", sbuf.string);
+        //log_print( "\nsbuffer: \n%s\n", sbuf.string);
         if(*ret) break;
         for (int i=0; i<=sbuf.end_pos; i++){
             switch (sbuf.string[i]){
@@ -771,7 +776,7 @@ void* surv_handleExecCallSocket(void* surv_struct){
                         sbuf.string[i] = '\0';
                         *ret = sb_append(fields+curr_field,
                                         sbuf.string+lfield_start);
-                        //printf("field: %i \n cont: %s\n",
+                        //log_print("field: %i \n cont: %s\n",
                         //        curr_field,fields[curr_field].string);
                         execCall* eCall = malloc(sizeof(*eCall));
                         //execCall eCall;
@@ -780,13 +785,14 @@ void* surv_handleExecCallSocket(void* surv_struct){
                                             fields+PPID,fields+Args)){
                             case 1:
                                 //Memory error => Panic
-                                perror("ToDo handle memory Error");
+                                log_print(surv->execCallLog_fp,
+                                          "ToDo handle memory Error");
                                 break;
                             case 2:
-                                perror("Handle misalignment of fields");
+                                log_print(surv->execCallLog_fp,
+                                          "Handle misalignment of fields");
                                 break;
                             case -1:
-                                perror("missing something");
                                 //Handle case
                             case NOMINAL:
                                 *ret = g_ringBuffer_write(&surv->commandQueue,
@@ -818,7 +824,7 @@ void* surv_handleExecCallSocket(void* surv_struct){
                 case '\t':
                     sbuf.string[i] = '\0';
                     sb_append(fields+curr_field,sbuf.string+lfield_start);
-                    //printf("field: %i \n cont: %s\n",
+                    //log_print("field: %i \n cont: %s\n",
                     //       curr_field,fields[curr_field].string);
                     curr_field++;
                     lfield_start = i+1;
@@ -827,7 +833,7 @@ void* surv_handleExecCallSocket(void* surv_struct){
             }
         }
         sb_deletehead(&sbuf,lfield_start);
-        //printf("Buffer:%s\n",sbuf.string);
+        //log_print("Buffer:%s\n",sbuf.string);
         lfield_start=0;
     }
     //Cleanup if other type of error
@@ -838,7 +844,8 @@ cleanupStringBuffers:
 cleanupRecieveBuffer:
     sb_destroy(&sbuf);
 endfun:
-    printf("ExecCallSocket_offline:%i\n",*ret);
+    log_print(surv->execCallLog_fp, "shutting down execCall parse thread\n"
+              "Return Value: %i\n",*ret);
     surv->processing_execcall_socket = 0;
     return ret;
 }
