@@ -44,5 +44,8 @@ include_directories("${PROJECT_BINARY_DIR}")
 option (DEBUG
         "Run programs in DEBUG MODE" OFF)
 
+#ExternalProject Module for BerkleyDB
+include(${CMAKE_ROOT}/Modules/ExternalProject.cmake)
+#SubDirectory
 add_subdirectory(${PROJECT_SOURCE_DIR}/src/tracer)
 add_subdirectory(${PROJECT_SOURCE_DIR}/src/watchdog)

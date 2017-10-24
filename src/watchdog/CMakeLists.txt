@@ -19,6 +19,7 @@ set_property(TARGET def_library PROPERTY C_STANDARD 99)
 target_include_directories(def_library
     PUBLIC include
 )
+
 ###### Containers Library  ######
 
 set(library_SOURCES
@@ -34,7 +35,7 @@ target_include_directories(containers_library
 )
 
 
-#Generate static library from libart dependency
+####### Generate static library from libart dependency ######
 
 set(libart_SOURCES
     deps/libart/src/art.c)
@@ -44,7 +45,38 @@ add_library(libart STATIC ${libart_SOURCES})
 target_include_directories(libart
     PUBLIC deps/libart/src)
 
-#Adding executables and setting library dependencies
+####### Berkley DB #######
+ExternalProject_Add( db
+    URL http://download.oracle.com/berkeley-db/db-6.2.32.tar.gz
+    SOURCE_DIR ${CMAKE_BINARY_DIR}/db_static-src
+    BINARY_DIR ${CMAKE_BINARY_DIR}/db_static-bin
+    CONFIGURE_COMMAND ${CMAKE_BINARY_DIR}/db_static-src/dist/configure --disable-shared --prefix ${CMAKE_BINARY_DIR}/db_static-bin
+    BUILD_COMMAND "make"
+)
+
+add_library(berkeleyDB STATIC IMPORTED)
+set_property(TARGET berkeleyDB
+    PROPERTY IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/db_static-bin/lib/libdb-6.2.a)
+add_dependencies(berkeleyDB db)
+
+###### Definition Library  ######
+
+set(db_man_SOURCES
+    src/database.c)
+
+#Generate the static library from the library sources
+add_library(db_man STATIC ${db_man_SOURCES})
+set_property(TARGET db_man PROPERTY C_STANDARD 99)
+
+target_include_directories(db_man
+    PUBLIC include
+)
+add_dependencies(db_man berkeleyDB)
+target_link_libraries(db_man
+    PRIVATE berkeleyDB)
+
+####### Adding executables and setting library dependencies ####
+
 
 add_executable(watchdog_daemon
     src/watchdog.c)
@@ -56,6 +88,8 @@ set_property(TARGET watchdog_ctrl PROPERTY C_STANDARD 99)
 
 target_link_libraries(watchdog_daemon
     PRIVATE def_library
+    PRIVATE berkeleyDB
+    PRIVATE db_man
     PRIVATE containers_library
     PRIVATE libart
     Threads::Threads)

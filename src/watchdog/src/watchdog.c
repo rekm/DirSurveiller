@@ -12,6 +12,7 @@
 #include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include "database.h"
 #include "watchdog.h"
 #include "DirSurveillerConfig.h"
 
@@ -1114,7 +1115,6 @@ endfun:
 }
 
 
-
 int main(int argc, char** argv){
     int max_pid;
     int ret = NOMINAL;
@@ -1132,7 +1132,8 @@ int main(int argc, char** argv){
     char* opensocket_addr = "/tmp/opentrace_opencalls";
     char* execsocket_addr = "/tmp/opentrace_execcalls";
     char* ctlsocket_addr = "/tmp/opentrace_ctl.socket";
-
+    //Initializing database, if it is not initialized already
+    createDatabase();
     //Preparing thread ids and return values//
     pthread_t threadExecId;
     int* t_exec_ret;
