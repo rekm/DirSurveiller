@@ -192,6 +192,7 @@ typedef struct {
     g_ringBuffer dispatchQueue;
     g_ringBuffer commandQueue;
     g_ringBuffer openQueue;
+    db_manager db_man;
 } surveiller;
 
 /**
@@ -209,7 +210,8 @@ typedef struct {
 int surv_init(surveiller* this, const char* opencall_socketaddr,
               const char* execcall_socketaddr,
               const char* ctl_socketaddr,
-              pthread_t* shutdownThread);
+              pthread_t* shutdownThread,
+              const char* database_dir);
 void surv_destroy(surveiller* this);
 
 int surv_check_running(surveiller* this);

@@ -382,7 +382,8 @@ execCall* procindex_retrieve(procindex* this, pid_t target_pid){
 int surv_init(surveiller* this, const char* opencall_socketaddr,
               const char* execcall_socketaddr,
               const char* ctl_socketaddr,
-              pthread_t* shutdownThread){
+              pthread_t* shutdownThread,
+              const char* database_dir){
     int ret = NOMINAL;
     sprintf(this->status_msg,"starting up...\n");
     this->opencall_socketaddr = opencall_socketaddr;
@@ -394,7 +395,6 @@ int surv_init(surveiller* this, const char* opencall_socketaddr,
     this->restart=0;
     this->processing_execcall_socket = 0;
     this->processing_opencall_socket = 0;
-
     //Setup LOGFiles
     this->mainLog_fp = fopen( LOG_DIR "/watchdogDaemon_mLOG", "a");
     if(!this->mainLog_fp){
@@ -434,6 +434,7 @@ int surv_init(surveiller* this, const char* opencall_socketaddr,
     }
     ret = g_ringBuffer_init(&this->openQueue, sizeof(openCall*));
 
+    ret = db_man_init( &this->db_man, database_dir);
     ret = g_ringBuffer_init(&this->dispatchQueue, sizeof(execCall*));
     if (pipe(this->killpipe_fd) == -1) {
         perror("could not create kill_pipe");
@@ -471,6 +472,7 @@ void surv_destroy(surveiller* this){
     fclose(this->execCallLog_fp);
     fclose(this->openCallLog_fp);
     fclose(this->mainLog_fp);
+    db_man_close(&this->db_man);
 }
 
 /**
@@ -1133,7 +1135,7 @@ int main(int argc, char** argv){
     char* execsocket_addr = "/tmp/opentrace_execcalls";
     char* ctlsocket_addr = "/tmp/opentrace_ctl.socket";
     //Initializing database, if it is not initialized already
-    createDatabase();
+
     //Preparing thread ids and return values//
     pthread_t threadExecId;
     int* t_exec_ret;
@@ -1149,7 +1151,8 @@ int main(int argc, char** argv){
                     opensocket_addr,
                     execsocket_addr,
                     ctlsocket_addr,
-                    &threadShutdownId);
+                    &threadShutdownId,
+                    DATABASE_DIR);
     if(ret)
         exit(EXIT_FAILURE);
 
