@@ -1,5 +1,6 @@
 project(watchdog)
 
+enable_testing()
 
 ###### Require Pthreads ###########
 
@@ -59,7 +60,7 @@ set_property(TARGET berkeleyDB
     PROPERTY IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/db_static-bin/lib/libdb-6.2.a)
 add_dependencies(berkeleyDB db)
 
-###### Definition Library  ######
+###### Database Management Library  ######
 
 set(db_man_SOURCES
     src/database.c)
@@ -74,6 +75,13 @@ target_include_directories(db_man
 add_dependencies(db_man berkeleyDB)
 target_link_libraries(db_man
     PRIVATE berkeleyDB)
+
+add_executable(db_man_test src/database_test.c )
+target_link_libraries(db_man_test
+    PRIVATE db_man
+    Threads::Threads)
+add_test(DbManagerMarshallTestEcall1 ${CMAKE_BINARY_DIR}/db_man_test 1)
+add_test(DbManagerMarshallTestOcall1 ${CMAKE_BINARY_DIR}/db_man_test 2)
 
 ####### Adding executables and setting library dependencies ####
 

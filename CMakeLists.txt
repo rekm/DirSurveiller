@@ -6,6 +6,8 @@ set (DirSurveiller_VERSION_MAJOR 0)
 set (DirSurveiller_VERSION_MINOR 0)
 set (DirSurveiller_VERSION_PATCH 1)
 
+enable_testing()
+
 #Create directory for logs
 set(LOG_DIR "${PROJECT_BINARY_DIR}/logs" CACHE PATH
     "Directory where logs are stored")
