@@ -1,5 +1,5 @@
 #define _GNU_SOURCE
-
+#define _XOPEN_SOURCE 500
 #include <argp.h>
 #include <error.h>
 #include <linux/limits.h>
@@ -9,7 +9,10 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+
 #include <DirSurveillerConfig.h>
+#include "database.h"
+
 // Argparse code mostly copied from the argparse manual
 
 const char* argp_program_version = "watchdog_ctrl " DirSurveiller_FULL_VERSION;
@@ -21,9 +24,10 @@ static char doc[] =
       	This program is supposed to represent the api for controlling\n \
       	the watchdog daemon.\n\
         It is used to check its status, start, stop, or\n\
-      	add and remove files/directories from the watchlist";
+      	add and remove files/directories from the watchlist.\n\
+        Also it presents the option to query the call database";
 
-static char args_doc[] = "...";
+static char args_doc[] = "[ARG1]";
 
 #define OPT_ABORT  1            /* –abort */
 
@@ -37,21 +41,72 @@ static struct argp_option options[] = {
         "Add FILE or DIRECTORY to watchlist" },
   	{"delete", 'd', "FILE/DIR",  OPTION_ARG_OPTIONAL,
         "Delete FILE or DIRECTORY from watchlist" },
-  	{"abort",    OPT_ABORT, 0, 0, "Abort before showing any output"},
-	{ 0 }
+    {0,0,0,0, "Get stored information from databases"
+              " (using the first argument)"},
+    {"get", 'g', "Suboption", OPTION_ARG_OPTIONAL,
+     "Get Record for given File or Directory"
+        "(current working directory, if none provided)"},
+    {0,0,0,0, "suboptions of \"get\" options (-g opt1=arg,opt2,opt3=arg)"},
+	{"get", 'g', ",format=[text(t),json(j),interactive(i)]",0,
+     "Selection of output format. Inteactive mode is not yet implemented"},
+    {"get", 'g', ",ex=[key(k),name(n),timestamp(t)]", 0,
+     "Triggers process retrieval and alows for specifiers on how to retrieve"
+     " them. default is key retrieval (if \"ex\" w/o args)"
+     "The first non option argument (arg1) is the input for retrieval."
+     "\n key: timestamp+pid\n name: process_name\n timestamp: sec.usec"
+     " (sec is in epoch time )" },
+    {"get", 'g', ",no_as", 0, "Do not get associated open or exec calls."
+     "Only retrieve what you asked for."},
+    {0,0,0,0, "Standard Otions"},
+    {"abort",    OPT_ABORT, 0, 0, "Abort before showing any output"},
 };
 
 struct arguments
 {
-  	int start, stop, status, abort, restart;
+  	int start, stop, status, abort, restart,
+        get, format, eCallMode, no_associated;
   	char *add_file;
 	char *remove_file;    /* file arg to ‘--output’ */
+    char *arg1;
+    char *retrievePath;
+};
+
+
+enum {
+    FORMAT_OPTION = 0,
+    OCALLS_FROM_ECALL_KEY_OPTION,
+    NO_ASSOCIATED,
+    THE_END
+};
+
+
+enum {
+    TEXT = 0,
+    JSON = 1,
+    INTERACTIVE =2
+};
+
+//Enum for type of execCall retrieval
+enum {
+    KEY = 1,
+    NAME,
+    TIME_STAMP
+};
+
+char *get_opts[] = {
+    [FORMAT_OPTION] = "format",
+    [OCALLS_FROM_ECALL_KEY_OPTION] = "ex",
+    [NO_ASSOCIATED] = "no_as",
+    [THE_END] = NULL
 };
 
 static error_t parse_opt (int key, char *arg, struct argp_state *state){
 	/* Get the input argument from argp_parse, which we
      * know is a pointer to our arguments structure. */
-	struct arguments *arguments = state->input;
+	opterr = 0;
+    char* subopts;
+    char* value;
+    struct arguments *arguments = state->input;
 
 	switch (key){
 		case 's':
@@ -60,6 +115,51 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state){
 		case 'q':
 		  	arguments->stop = 1;
 		  	break;
+        case 'g':
+            arguments->get = 1;
+            subopts = arg;
+            if(!arg){
+                break;
+            }
+            while(*subopts != '\0'){
+                switch( getsubopt(&subopts, get_opts, &value)){
+                    case FORMAT_OPTION:
+                        if( value == NULL || !strncmp("text",value,1) ){
+                            arguments->format = TEXT;
+                        }
+                        else if(!strncmp("json",value,1)){
+                            arguments->format = JSON;
+                        }
+                        else if(!strncmp("interactive",value,1)){
+                            arguments->format = INTERACTIVE;
+                        }
+                        else{
+                            fprintf(stderr, "Subcommand not recognized!\n");
+                        }
+                        break;
+                    case OCALLS_FROM_ECALL_KEY_OPTION:
+                        if( value == NULL || !strncmp("key",value,1)){
+                            arguments->eCallMode = KEY;
+                        }
+                        else if (!strncmp("name",value,1)){
+                            arguments->eCallMode = NAME;
+                        }
+                        else if (!strncmp("timestamp", value, 1)){
+                            arguments->eCallMode = TIME_STAMP;
+                        }
+                        else{
+                            arguments->eCallMode = -1;
+                        }
+                        break;
+                    case NO_ASSOCIATED:
+                        arguments->no_associated = 1;
+                        break;
+                    default:
+                        fprintf(stderr, "No suboption detected!\n"
+                                "Supplied: %s\n", arg);
+                }
+            }
+
         case 'r':
             arguments->restart = 1;
             break;
@@ -73,18 +173,18 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state){
 		  	realpath(arg ? arg : "./", arguments->remove_file);
 		  	break;
 		case OPT_ABORT:
-		  arguments->abort = 1;
-		  break;
+		    arguments->abort = 1;
+		    break;
 
 		case ARGP_KEY_NO_ARGS:
-		  state->next = state->argc;
-		  //argp_usage (state);
+		    state->next = state->argc;
+		    //argp_usage (state);
 
 		case ARGP_KEY_ARG:
 		  /* Here we know that state->arg_num == 0, since we
 			 force argument parsing to end before any more arguments can
 			 get here. */
-//		  arguments->arg1 = arg;
+		  arguments->arg1 = arg;
 
 		  /* Now we consume all the rest of the arguments.
 			 state->next is the index in state->argv of the
@@ -109,6 +209,65 @@ static error_t parse_opt (int key, char *arg, struct argp_state *state){
 
 static struct argp argp = { options, parse_opt, args_doc, doc };
 
+
+int get_from_database(struct arguments* args){
+    int ret = 0;
+    stringBuffer ret_stringbuffer;
+    ret = sb_init(&ret_stringbuffer,256);
+    db_manager db_man;
+    createDatabase(&db_man);
+    // Result vector
+    vector result_recordv;
+    vector_init(&result_recordv, 32, sizeof(db_full_Record*));
+    if(!args->eCallMode){
+        realpath( args->arg1 ? args->arg1 : "./", args->retrievePath );
+        retrieveRecords_Path(&result_recordv, &db_man,
+                             args->retrievePath);
+        for (int i=0; i <= result_recordv.length; i++){
+            db_full_Record *record = result_recordv.elems[i];
+        }
+    }
+    switch(args->format){
+        case TEXT:
+            if(!result_recordv.length){
+                printf("No Records Found for query:\n %s\n",
+                       args->retrievePath);
+            }
+            else{
+                printf("Text return not implemented yet\n");
+            }
+            break;
+        case JSON:
+            sb_append(&ret_stringbuffer,"[");
+            for(unsigned ii=0; ii<result_recordv.length; ii++){
+                db_full_Record_jsonsb(result_recordv.elems[ii],
+                                      &ret_stringbuffer);
+                sb_append(&ret_stringbuffer,", ");
+            }
+            sb_append(&ret_stringbuffer,"]\n");
+            printf("%s\n", ret_stringbuffer.string);
+            break;
+        case INTERACTIVE:
+            if(!result_recordv.length){
+                printf("No Records Found for query:\n %s\n",
+                       args->retrievePath);
+            }
+            else{
+                printf("Interactive mode not implemented yet\n");
+            }
+            break;
+        default:
+            printf("Error occured: fell through format switch\n"
+                   "Enum value: %i\n", args->format);
+
+    }
+    //vector_destroyd( &result_recordv, db_full_Record_destroy),
+    db_man_close(&db_man);
+    sb_destroy(&ret_stringbuffer);
+    return ret;
+}
+
+
 int main (int argc, char** argv){
 	struct arguments args;
 	char ctrl_socket_addr[] = "/tmp/opentrace_ctl.socket";
@@ -116,7 +275,7 @@ int main (int argc, char** argv){
     args.add_file = calloc(PATH_MAX+1,sizeof(char));
 	if(!args.add_file)
     {
-        perror("file name");
+        perror("cannot allocate add file");
         exit(EXIT_FAILURE);
     }
     args.remove_file = calloc(PATH_MAX+1, sizeof(char));
@@ -126,11 +285,20 @@ int main (int argc, char** argv){
         perror("file name");
         exit(EXIT_FAILURE);
     }
+    args.retrievePath = calloc(PATH_MAX+1, sizeof(char));
+    if(!args.retrievePath){
+        perror("could not allocate first argument");
+        exit(EXIT_FAILURE);
+    }
+
+    args.abort = 0;
+    args.eCallMode = 0;
+    args.get = 0;
+    args.restart = 0;
+    args.status = 0;
     args.start = 0;
     args.stop = 0;
-    args.status = 0;
-    args.abort = 0;
-    args.restart = 0;
+    args.format = TEXT;
     argp_parse (&argp, argc, argv, 0, 0, &args);
 
     if(args.abort)
@@ -139,8 +307,12 @@ int main (int argc, char** argv){
         error (11, 0, "START and STOP exclude eachother");
     if(args.stop && args.restart)
         error (11, 0, "Cannot STOP and RESTART at the same time");
+    if(args.get){
+        ret = get_from_database(&args);
+        goto endprog;
+    }
     if(!(args.stop || args.start || args.status ||
-         args.add_file[0] || args.remove_file[0] || args.restart))
+         args.add_file[0] || args.remove_file[0] || args.restart || args.get))
     {
         fprintf(stderr, "No options provided! Will check daemon status\n\n");
         args.status = 1;
@@ -267,10 +439,12 @@ int main (int argc, char** argv){
         }
     }
 
+
 disconnect_socket:
     close(so_fd);
 endprog:
     free(args.add_file);
     free(args.remove_file);
+    free(args.retrievePath);
     exit(ret ? EXIT_FAILURE : EXIT_SUCCESS);
 }

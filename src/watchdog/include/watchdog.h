@@ -182,6 +182,7 @@ typedef struct {
     FILE* execCallLog_fp;
     FILE* ctrlLog_fp;
     pid_t ownPID;
+    unsigned boot_time;
     char status_msg[200];
     pthread_t* shutdownThreadId;
     const char* opencall_socketaddr;

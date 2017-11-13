@@ -74,10 +74,12 @@ target_include_directories(db_man
 )
 add_dependencies(db_man berkeleyDB)
 target_link_libraries(db_man
-    PRIVATE berkeleyDB)
+    PRIVATE berkeleyDB
+    PRIVATE containers_library)
 
 add_executable(db_man_test src/database_test.c )
 target_link_libraries(db_man_test
+    PRIVATE containers_library
     PRIVATE db_man
     Threads::Threads)
 add_test(DbManagerMarshallTestEcall1 ${CMAKE_BINARY_DIR}/db_man_test 1)
@@ -100,4 +102,8 @@ target_link_libraries(watchdog_daemon
     PRIVATE db_man
     PRIVATE containers_library
     PRIVATE libart
+    Threads::Threads)
+
+target_link_libraries(watchdog_ctrl
+    PRIVATE db_man
     Threads::Threads)

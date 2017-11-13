@@ -70,6 +70,53 @@ int sb_stringCpy(char** retString, stringBuffer* this){
     return ret;
 }
 
+// Vector implementation
+
+int vector_init(vector* this, size_t len, size_t size_elem){
+    this->elems = calloc(len, size_elem);
+    if(!this->elems)
+        return 1;
+    this->capacity = len;
+    this->length = 0;
+    this->size_elem = size_elem;
+    return 0;
+}
+
+void vector_destroy(vector* this){
+    zfree(this->elems);
+    this->capacity = 0;
+    this->length = 0;
+    this->size_elem = 0;
+}
+
+void vector_destroyd(vector* this, void (*destruct_fun)(void*)){
+    for(int i=0; i<this->length ; i++){
+        destruct_fun(this->elems[i]);
+    }
+    zfree(this->elems);
+}
+
+int vector_append(vector* this, void* elem){
+    if( this->capacity < (this->length+1)){
+        void** tmp_elems = realloc(this->elems,
+                                   (this->size_elem*this->capacity*3)/2);
+        if(!tmp_elems)
+            return 1;
+        this->elems = tmp_elems;
+        this->capacity = (this->capacity*3)/2;
+    }
+    this->elems[this->length] = elem;
+    this->length++;
+    return 0;
+}
+
+int vector_get(vector* this, void** ret_elem, size_t pos){
+    if( pos >= this->length)
+        return -1;
+    *ret_elem = this->elems[pos];
+    return 0;
+}
+
 // Char ringbuffer implementation
 
 void char_ringBuffer_init(char_ringBuffer* rb){

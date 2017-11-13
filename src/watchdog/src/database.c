@@ -1,8 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+
 #include "database.h"
 #include "DirSurveillerConfig.h"
-#include "string.h"
 
 
 //  #####  Marshalled Object #####  //
@@ -57,6 +58,7 @@ int db_execCall_to_jsonstringb(stringBuffer* jsonBuffer,
     int charsformated = 0;
     char buffer[300];
     ret = sb_append(jsonBuffer,"{");
+
     charsformated = snprintf(buffer, 300,
                              "\"time_stamp\": %li.%li, "
                              "\"pid\": %i, "
@@ -66,9 +68,13 @@ int db_execCall_to_jsonstringb(stringBuffer* jsonBuffer,
                              eCall->pid,
                              eCall->ppid);
     ret = sb_append(jsonBuffer,buffer);
+    ret = sb_append(jsonBuffer, ", \"cmd\": \"");
+    ret = sb_append(jsonBuffer, eCall->cmd_name);
+    ret = sb_append(jsonBuffer, "\"");
     ret = sb_append(jsonBuffer, ", \"args\": \"");
     ret = sb_append(jsonBuffer, eCall->args);
     ret = sb_append(jsonBuffer, "\"");
+
     ret = sb_append(jsonBuffer,"}");
     return ret;
 }
@@ -139,6 +145,28 @@ void db_openCall_init(oCallRecord *this){
     this->filepath = NULL;
 }
 
+int db_openCall_to_jsonstringb(stringBuffer* jsonBuffer,
+                               oCallRecord* oCall){
+    int ret = 0;
+    int charsformated = 0;
+    char buffer[300];
+    ret = sb_append(jsonBuffer,"{");
+
+    charsformated = snprintf(buffer, 300,
+                             "\"time_stamp\": %li.%li, "
+                             "\"flag\": %i",
+                             oCall->time_stamp.tv_sec,
+                             oCall->time_stamp.tv_usec,
+                             oCall->flag);
+    ret = sb_append(jsonBuffer,buffer);
+    ret = sb_append(jsonBuffer, ", \"filepath\": \"");
+    ret = sb_append(jsonBuffer, oCall->filepath);
+    ret = sb_append(jsonBuffer, "\"");
+
+    ret = sb_append(jsonBuffer,"}");
+    return ret;
+}
+
 void gen_filepath_suffix(char* suffix, char* filepath){
     size_t path_length;
     size_t start_pos;
@@ -197,6 +225,38 @@ int db_openCall_unmarshall(oCallRecord* oCall ,m_object* m_obj){
     return 0;
 }
 
+// ########## OpenCall Full Record ############ //
+
+
+int db_full_Record_init(db_full_Record* this){
+    int ret = 0;
+    ret = vector_init(&this->execCalls, 8, sizeof(eCallRecord*));
+    return ret;
+}
+
+
+// Todo recover from error in a sane way
+int db_full_Record_jsonsb(db_full_Record* this, stringBuffer* sb){
+    int ret = 0;
+    unsigned start_pos = sb->end_pos;
+    if((ret = sb_append( sb, "{ \"openCall\"=")))
+        goto endfun;
+    if((ret = db_openCall_to_jsonstringb( sb, &this->openCall)))
+        goto endfun;
+    if((ret = sb_append( sb,"\n\"execCalls\"=[")))
+        goto endfun;
+    for( unsigned i=0; i<this->execCalls.length; i++){
+        if((db_execCall_to_jsonstringb( sb, this->execCalls.elems[i])))
+            goto endfun;
+        if((sb_append( sb, ", ")))
+            goto endfun;
+    }
+    sb_append(sb, "]\n");
+endfun:
+    return ret;
+}
+
+
 
 // ################ DB Manager ################ //
 
@@ -234,9 +294,9 @@ int db_openCalls_filepathCallback(DB* dbp,
 // ######## Creating databases ######### //
 
 int createDatabase(db_manager* db_man){
-    DB_ENV *g_dbenv = db_man->dbenv;
     int ret;
     ret = db_env_create(&db_man->dbenv, 0);
+    DB_ENV *g_dbenv = db_man->dbenv;
     if(ret){
         fprintf(db_man->errorFileP, "Error creating env handle: %s\n",
                 db_strerror(ret));
@@ -258,7 +318,8 @@ int createDatabase(db_manager* db_man){
         // Creation
     ret = db_create(&db_man->openCallDBp, g_dbenv,0);
     if (ret){
-   		fprintf(db_man->errorFileP, "Error creating db: %s", db_strerror(ret));
+   		fprintf(db_man->errorFileP, "Error creating openCall_db: %s",
+                db_strerror(ret));
     	return -1;
     }
         //Config
@@ -271,10 +332,21 @@ int createDatabase(db_manager* db_man){
         //Creating Secondary database/Index for filenames
     ret = db_create(&db_man->openCallFilePathDBp, g_dbenv,0);
     if (ret){
+   		fprintf(db_man->errorFileP,
+                "Error creating filepath index openCall_db: %s",
+                db_strerror(ret));
+        return -1;
         //ToDo
     }
     ret = db_man->openCallFilePathDBp->set_flags(db_man->openCallFilePathDBp,
                                                  DB_DUPSORT);
+    if (ret){
+   		fprintf(db_man->errorFileP,
+                "Error setting flags for filpath index for openCall_db: %s",
+                db_strerror(ret));
+        return -1;
+    }
+
         //Opening secondary database handle
     ret = db_man->openCallFilePathDBp->open(db_man->openCallFilePathDBp,
                                             NULL, "openCallsFilepath.db",
@@ -283,7 +355,11 @@ int createDatabase(db_manager* db_man){
                                                 DB_THREAD,
                                             0644);
     if (ret){
-        //ToDo
+   		fprintf(db_man->errorFileP,
+                "Error while opening secondary db for filpath index"
+                    " of openCall_db: %s",
+                db_strerror(ret));
+        return -1;
     }
         /* Associate openCallFilePath.db with openCall.db to create
          * a secondary index. This useses the filepath callback function
@@ -292,11 +368,20 @@ int createDatabase(db_manager* db_man){
                                          db_man->openCallFilePathDBp,
                                          db_openCalls_filepathCallback,
                                          DB_CREATE);
+    if (ret){
+   		fprintf(db_man->errorFileP,
+                "Error while associating secondary_db for filpath index"
+                    " to openCall_db: %s",
+                db_strerror(ret));
+    	//db_man_close(db_man);
+        return -1;
+    }
     //Setup OpenWatchlist database
 
-    ret = db_create(&db_man->execCallDBp, g_dbenv,0);
+    ret = db_create(&db_man->watchlistDBp, g_dbenv,0);
     if (ret){
-   		fprintf(db_man->errorFileP, "Error creating db: %s", db_strerror(ret));
+   		fprintf(db_man->errorFileP,
+                "Error creating watchlistDB: %s", db_strerror(ret));
     	return -1;
     }
 
@@ -304,19 +389,27 @@ int createDatabase(db_manager* db_man){
                                      "watchlist.db", NULL, DB_BTREE,
                                      DB_AUTO_COMMIT | DB_CREATE | DB_THREAD,
                                      0644);
-
+    if (ret){
+   		fprintf(db_man->errorFileP,
+                "Error creating watchlist_db: %s", db_strerror(ret));
+    	return -1;
+    }
     //Setup execCall database
 
-    ret = db_create(&db_man->execCallDBp, g_dbenv,0) == 0;
+    ret = db_create(&db_man->execCallDBp, g_dbenv,0);
     if (ret){
-   		fprintf(db_man->errorFileP, "Error creating db: %s", db_strerror(ret));
+   		fprintf(db_man->errorFileP,
+                "Error creating execCall_db: %s", db_strerror(ret));
     	return -1;
     }
 
-    ret = db_man->execCallDBp->open(db_man->execCallDBp, NULL, "execCalls.db", NULL, DB_BTREE,
-                    DB_AUTO_COMMIT | DB_CREATE | DB_THREAD, 0644) == 0;
+    ret = db_man->execCallDBp->open(db_man->execCallDBp, NULL, "execCalls.db",
+                                    NULL, DB_BTREE,
+                                    DB_AUTO_COMMIT |
+                                        DB_CREATE | DB_THREAD,
+                                     0644) == 0;
 
-    g_dbenv->close(g_dbenv,0);
+    //g_dbenv->close(g_dbenv,0);
     return 0;
 }
 
@@ -332,36 +425,81 @@ int db_man_close(db_manager *this){
     if(this->openCallFilePathDBp){
         ret = this->openCallFilePathDBp->close(this->openCallFilePathDBp,0);
         if(ret){
-            fprintf(this->errorFileP, "Error deleting db: %s", db_strerror(ret));
+            fprintf(this->errorFileP,
+                    "Error deleting FilepathIndexDb: %s", db_strerror(ret));
         }
     }
         //Closing primary Database
     if(this->openCallDBp){
         ret = this->openCallDBp->close(this->openCallDBp,0);
         if(ret){
-            fprintf(this->errorFileP, "Error deleting db: %s", db_strerror(ret));
+            fprintf(this->errorFileP,
+                    "Error deleting db: %s", db_strerror(ret));
         }
     }
     //Closing ExecCall Database
     if(this->execCallDBp){
         ret = this->execCallDBp->close(this->execCallDBp,0);
         if(ret){
-            fprintf(this->errorFileP, "Error deleting db: %s", db_strerror(ret));
+            fprintf(this->errorFileP,
+                    "Error deleting db: %s", db_strerror(ret));
         }
     }
     //Closing WatchList Database
     if(this->watchlistDBp){
         ret = this->watchlistDBp->close(this->watchlistDBp,0);
         if(ret){
-            fprintf(this->errorFileP, "Error deleting db: %s", db_strerror(ret));
+            fprintf(this->errorFileP,
+                    "Error deleting db: %s", db_strerror(ret));
         }
     }
+    this->dbenv->close(this->dbenv,0);
     return ret;
 }
 
-void retrieveRecords_Path(db_manager* db_man, const char* path){
-
-
+int retrieveRecords_Path(vector* recordList,
+                         db_manager* db_man, char* path){
+    int ret;
+    DBT key, data;
+    DBC* filepath_cursorp;
+    // Zero out structures
+    memset(&key, 0, sizeof(DBT));
+    memset(&data, 0, sizeof(DBT));
+    key.data = path;
+    key.size = strlen(path)+1;
+    //Get Cursor
+    db_man->openCallFilePathDBp->cursor(db_man->openCallFilePathDBp,
+                                        0, &filepath_cursorp, 0);
+    ret = 0;
+    ret = vector_init(recordList, 8, sizeof(db_full_Record*));
+    ret = filepath_cursorp->get(filepath_cursorp, &key, &data, DB_SET);
+    if(!ret){
+        do {
+            m_object m_obj;
+            m_obj.size = data.size;
+            m_obj.buffer = data.data;
+            db_full_Record* fullRecord = malloc(sizeof(fullRecord));
+            db_full_Record_init(fullRecord);
+            db_openCall_unmarshall(&fullRecord->openCall, &m_obj);
+            db_eCallKey next_eCallKey;
+            eCallRecord* tmp_eCall;
+            next_eCallKey = fullRecord->openCall.eCallKey;
+            while( next_eCallKey.pid != 0){
+                tmp_eCall = malloc(sizeof(*tmp_eCall));
+                if(!tmp_eCall){
+                    //Do stuff
+                }
+                ret = db_get_execCall_by_key(db_man, &tmp_eCall,
+                                             &next_eCallKey);
+                ret = vector_append(&fullRecord->execCalls, tmp_eCall);
+                next_eCallKey = tmp_eCall->parentEcall;
+            }
+        }
+        while(filepath_cursorp->get(filepath_cursorp, &key, &data,
+                                    DB_NEXT_DUP));
+    }
+    filepath_cursorp->close(filepath_cursorp);
+    return ret;
 }
 
 
@@ -391,6 +529,26 @@ int db_add_execCall(db_manager* db_man, eCallRecord* db_eCall){
     m_object_destroy(&m_obj);
     return ret;
 }
+
+int db_get_execCall_by_key(db_manager* db_man, eCallRecord** db_eCall,
+                           db_eCallKey* eCall_key){
+    int ret;
+    DBT key, data;
+    memset(&key, 0, sizeof(DBT));
+    memset(&data, 0, sizeof(DBT));
+    key.data = &eCall_key;
+    key.size = sizeof(eCall_key);
+    data.flags = DB_DBT_USERMEM;
+    m_object tmp_data;
+    m_object_init(&tmp_data);
+    db_man->execCallDBp->get(db_man->execCallDBp, NULL, &key, &data, 0);
+    tmp_data.buffer = data.data;
+    tmp_data.size = data.size;
+    ret = db_execCall_unmarshall(*db_eCall, &tmp_data);
+    return ret;
+}
+
+
 
 int db_add_openCall(db_manager* db_man, oCallRecord* db_oCall){
     int ret;

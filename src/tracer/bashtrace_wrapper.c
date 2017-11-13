@@ -217,6 +217,8 @@ int primeCommandToExecute(
         FD_SET(fd_exec, &fds);
         if(  (( open_connection = accept( fd_open,NULL,NULL)) == -1)
            | (( exec_connection = accept( fd_exec,NULL,NULL)) == -1)) exit(-1);
+        printf("Attaching sockets to stdin and stderr.\n"
+               "Afterwards runnig command");
         //ret = select(fd_exec+1, &fds, NULL, NULL, &timeout);
         dup2( open_connection, STDOUT_FILENO);
         dup2( exec_connection, STDERR_FILENO);

@@ -16,6 +16,40 @@
 #include "watchdog.h"
 #include "DirSurveillerConfig.h"
 
+
+
+long get_boot_time(){
+    long ret = 1;
+    FILE* stat_fp;
+    char* boot_time = NULL;
+    char line[200];
+    stat_fp = fopen("/proc/stat","r");
+    if (!stat_fp){
+       ret = -2;
+       goto endfun;
+    }
+    int charsread;
+    while( fgets(line, 200, stat_fp) ){
+        if(ret)
+            ret = 0;
+        if(!strncmp(line,"btime",5)){
+            strtok(line," ");
+            boot_time = strtok(NULL, " ");
+            break;
+        }
+    }
+    if(!boot_time)
+        ret = -1;
+    else
+        ret = atol(boot_time);
+closeFile:
+    fclose(stat_fp);
+endfun:
+    return ret;
+}
+
+
+
 // OpenCall utils
 
 /**
@@ -400,6 +434,14 @@ int surv_init(surveiller* this, const char* opencall_socketaddr,
     if(!this->mainLog_fp){
        goto endfun;
     }
+    long tmp_boot_time = get_boot_time();
+    if(tmp_boot_time<0){
+       log_print(this->mainLog_fp, "Could not read"
+                                   " boot time from /proc/stat\n");
+       ret = -1;
+       goto closeMainLog;
+    }
+    this->boot_time = tmp_boot_time;
     this->openCallLog_fp = fopen( LOG_DIR "/watchdogDaemon_ocLOG", "a");
     if(!this->openCallLog_fp){
         //LOG Message
@@ -435,6 +477,7 @@ int surv_init(surveiller* this, const char* opencall_socketaddr,
     ret = g_ringBuffer_init(&this->openQueue, sizeof(openCall*));
 
     ret = db_man_init( &this->db_man, database_dir);
+    ret = createDatabase( &this->db_man);
     ret = g_ringBuffer_init(&this->dispatchQueue, sizeof(execCall*));
     if (pipe(this->killpipe_fd) == -1) {
         perror("could not create kill_pipe");
@@ -743,12 +786,16 @@ void* surv_handleExecCallSocket(void* surv_struct){
          | sb_init(&fields[PID],16)
          | sb_init(&fields[PPID],16)
          | sb_init(&fields[Args],128) );
-    if(*ret)
+    if(*ret){
+        log_print(surv->execCallLog_fp, "Field stringbuffer"
+                  " initialization failed!");
         goto cleanupStringBuffers;
+    }
 
     while(!surv->shutting_down){
         *ret = select(rc_fd+2, &rfds, NULL, NULL, NULL);
         if(*ret < 0){
+            log_print(surv->execCallLog_fp, "Error on socket!");
             //Error using socket
             break;
         }
@@ -770,7 +817,10 @@ void* surv_handleExecCallSocket(void* surv_struct){
         //fflush_unlocked(stdout);
         *ret = sb_appendl(&sbuf, buf, rlen);
         //log_print( "\nsbuffer: \n%s\n", sbuf.string);
-        if(*ret) break;
+        if(*ret) {
+            log_print(surv->execCallLog_fp, "Could not append to buffer!");
+            break;
+        }
         for (int i=0; i<=sbuf.end_pos; i++){
             switch (sbuf.string[i]){
                 case '\n':
@@ -1116,7 +1166,30 @@ endfun:
 
 }
 
+int surv_database_dispatch(surveiller* this,  execCall* eCall){
+    int ret = NOMINAL;
+    eCallRecord record;
+    oCallRecord oCrecord;
+    record.cmd_name = eCall->cmdName;
+    record.time_stamp = eCall->time_stamp;
+    record.ppid = eCall->ppid;
+    record.pid = eCall->pid;
+    record.env_args = "";
+    record.args = eCall->args;
+    record.parentEcall.pid = eCall->ppid;
+    record.time_stamp.tv_sec += this->boot_time;
+    ret = db_add_execCall(&this->db_man, &record);
 
+    for (int i=0; i<eCall->call_num; i++){
+        oCrecord.time_stamp = eCall->callBuff[i]->time_stamp;
+        oCrecord.time_stamp.tv_sec += this->boot_time;
+        oCrecord.flag = eCall->callBuff[i]->flag;
+        oCrecord.filepath = eCall->callBuff[i]->filepath;
+        db_execCall_genKey(&oCrecord.eCallKey,&record);
+        ret = db_add_openCall(&this->db_man, &oCrecord);
+    }
+    return ret;
+}
 int main(int argc, char** argv){
     int max_pid;
     int ret = NOMINAL;
@@ -1288,6 +1361,7 @@ int main(int argc, char** argv){
                 if(!dispatch_call){
                     perror("Dispatch Call doesn't exist!");
                 }
+                surv_database_dispatch(&surv,dispatch_call);
                 execCall_print(dispatch_call);
                 printf("\n");
                 execCall_destroy(dispatch_call);

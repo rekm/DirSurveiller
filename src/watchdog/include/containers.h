@@ -2,7 +2,7 @@
 #define _CONTAINERS_H
 
 #include <sys/types.h>
-#include "definitions.h"
+#include <definitions.h>
 //################ Stringbuffer #############
 
 typedef struct {
@@ -59,6 +59,52 @@ void sb_destroy(stringBuffer* this);
  */
 int sb_stringCpy(char** retString, stringBuffer* this);
 
+typedef struct {
+    void** elems;
+    size_t size_elem;
+    size_t capacity;
+    size_t length;
+} vector;
+
+/**
+ * Initialize Vector
+ * @size is the inital size of the buffer
+ * @returns 0, if successfull and
+ *          1, if memory allocation fails
+ */
+int vector_init(vector* this, size_t len, size_t size_elem);
+
+
+/**
+ * Append elem to buffer
+ * @elem
+ */
+int vector_append(vector* this, void* elem);
+
+/**
+ * Get element from vector
+ */
+int vector_get(vector* this,void** ret_elem, size_t pos);
+
+/**
+ * Delete first n (len) void*s from Buffer and shift remaining section
+ * to start of memory
+ * @len void*s to delete
+ */
+//void vector_deletehead(vector* this, size_t len);
+
+/**
+ * reset elem in Vector to empty elem
+ */
+//void vector_flush(vector* this);
+
+/**
+ * Destructor of Vector
+ */
+void vector_destroy(vector* this);
+
+void vector_destroyd(vector* this, void (*destruct_fun)(void*));
+
 //########## Ringbuffer ###############
 #define SIZE_RING 1024
 
@@ -82,7 +128,7 @@ int g_ringBuffer_full(g_ringBuffer* rb);
  * and calls a given destructor function, to make sure that the stored\n
  * data is also taken care of.\n
  *
- * @p this: A poiter to the general ringbuffer that needs destroying.
+ * @p this: A pointer to the general ringbuffer that needs destroying.
  * @p destruct_fun: A function that will be called on each elemet in the
  *                  buffer.
  */

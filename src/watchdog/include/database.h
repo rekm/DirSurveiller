@@ -1,10 +1,10 @@
 #ifndef _DATABASE_H
 #define _DATABASE_H
 
+#include <containers.h>
 #include <db.h>
 #include <sys/types.h>
 #include <sys/time.h>
-#include <containers.h>
 #define MaxPathSuffixLength 100
 
 /**
@@ -47,6 +47,8 @@ void db_execCall_init(eCallRecord *this);
 int db_execCall_marshall(m_object* m_obj, eCallRecord* eCall);
 int db_execCall_unmarshall(eCallRecord* eCall, m_object* m_obj);
 
+int db_execCall_to_jsonstringb(stringBuffer* jsonBuffer,
+                               eCallRecord* eCall);
 // ######### OPEN CALLS ########## //
 
 
@@ -76,6 +78,24 @@ void db_openCall_genKey(db_oCallKey* oCallKey, oCallRecord* oCall);
 void db_openCall_init(oCallRecord *this);
 int db_openCall_marshall(m_object* m_obj, oCallRecord* oCall);
 int db_openCall_unmarshall(oCallRecord* oCall, m_object* m_obj);
+
+int db_openCall_to_jsonstringb(stringBuffer* jsonBuffer,
+                               oCallRecord* oCall);
+/**
+ * Full Records associated with openCall
+ */
+typedef struct db_full_records_openCall{
+    oCallRecord openCall;
+    vector execCalls;
+}db_full_Record;
+
+
+
+int db_full_Record_init(db_full_Record* this);
+
+void db_full_Record_destroy(db_full_Record* this);
+
+int db_full_Record_jsonsb(db_full_Record* this, stringBuffer* sb);
 /**
  * General Database Management struct
  */
@@ -104,8 +124,19 @@ int db_man_close(db_manager*);
 
 /**
  * @brief Getting all opencalls matching input file with execCalls
+ *
+ * Recordlist will be filled with full open records which are constituted
+ * by an openCallRecord and the associated execCalls, where th first execCall
+ * is the one that called the open syscall and next are the parent processes.
+ *
+ * @param recordList: db_full_Record** non initialized where first pointer is
+ *      Null ((recordList)->[NULL])
+ * @returns: 0 on Success
+ *           1 on Memory allocation error
+ *           2 recordList non empty
  */
-void retrieveRecords_Path(db_manager* db_man, const char* path);
+int retrieveRecords_Path(vector* recordList,
+                         db_manager* db_man, char* path);
 
 /**
  * @brief getting all opencalls matching input and
@@ -122,6 +153,8 @@ int createDatabase(db_manager*);
  */
 int db_add_execCall(db_manager* db_man, eCallRecord* db_eCall );
 
+int db_get_execCall_by_key(db_manager* db_man, eCallRecord** db_eCall,
+                           db_eCallKey* eCall_key);
 /**
  * @brief add openCall
  */
