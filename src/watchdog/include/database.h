@@ -94,6 +94,7 @@ typedef struct db_full_records_openCall{
 int db_full_Record_init(db_full_Record* this);
 
 void db_full_Record_destroy(db_full_Record* this);
+void db_void_full_Record_destroy(void* this);
 
 int db_full_Record_jsonsb(db_full_Record* this, stringBuffer* sb);
 /**

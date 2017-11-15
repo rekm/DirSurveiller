@@ -28,7 +28,7 @@ int m_object_buffer_getstring(char** target, char* m_obj_buffer){
     length = strlen(m_obj_buffer)+1;
     if(*target)
        free(*target);
-    *target = calloc( length, sizeof(char));
+    *target = (char*)calloc( length, sizeof(char));
     if(!*target){
         return -1;
     }
@@ -230,10 +230,24 @@ int db_openCall_unmarshall(oCallRecord* oCall ,m_object* m_obj){
 
 int db_full_Record_init(db_full_Record* this){
     int ret = 0;
+    this->openCall.filepath = NULL;
     ret = vector_init(&this->execCalls, 8, sizeof(eCallRecord*));
     return ret;
 }
 
+void db_full_Record_destroy(db_full_Record* this){
+    for(int i=0; i<this->execCalls.length; i++){
+        zfree(& this->execCalls.elems[i]);
+    }
+}
+void db_void_full_Record_destroy(void* this){
+    db_full_Record* record = this;
+    zfree(&record->openCall.filepath);
+    for(int i=0; i<record->execCalls.length; i++){
+        zfree(&record->execCalls.elems[i]);
+    }
+    zfree(&record->execCalls.elems);
+}
 
 // Todo recover from error in a sane way
 int db_full_Record_jsonsb(db_full_Record* this, stringBuffer* sb){
@@ -471,14 +485,14 @@ int retrieveRecords_Path(vector* recordList,
     db_man->openCallFilePathDBp->cursor(db_man->openCallFilePathDBp,
                                         0, &filepath_cursorp, 0);
     ret = 0;
-    ret = vector_init(recordList, 8, sizeof(db_full_Record*));
+    //ret = vector_init(recordList, 8, sizeof(db_full_Record*));
     ret = filepath_cursorp->get(filepath_cursorp, &key, &data, DB_SET);
     if(!ret){
         do {
             m_object m_obj;
             m_obj.size = data.size;
             m_obj.buffer = data.data;
-            db_full_Record* fullRecord = malloc(sizeof(fullRecord));
+            db_full_Record* fullRecord = malloc(sizeof(*fullRecord));
             db_full_Record_init(fullRecord);
             db_openCall_unmarshall(&fullRecord->openCall, &m_obj);
             db_eCallKey next_eCallKey;
@@ -489,11 +503,18 @@ int retrieveRecords_Path(vector* recordList,
                 if(!tmp_eCall){
                     //Do stuff
                 }
+                db_execCall_init(tmp_eCall);
                 ret = db_get_execCall_by_key(db_man, &tmp_eCall,
                                              &next_eCallKey);
+                if(ret){
+                    next_eCallKey.pid = 0;
+                    zfree(&tmp_eCall);
+                    continue;
+                }
                 ret = vector_append(&fullRecord->execCalls, tmp_eCall);
                 next_eCallKey = tmp_eCall->parentEcall;
             }
+            ret = vector_append(recordList, fullRecord);
         }
         while(filepath_cursorp->get(filepath_cursorp, &key, &data,
                                     DB_NEXT_DUP));
@@ -536,15 +557,24 @@ int db_get_execCall_by_key(db_manager* db_man, eCallRecord** db_eCall,
     DBT key, data;
     memset(&key, 0, sizeof(DBT));
     memset(&data, 0, sizeof(DBT));
-    key.data = &eCall_key;
-    key.size = sizeof(eCall_key);
+    key.data = eCall_key;
+    key.size = sizeof(*eCall_key);
     data.flags = DB_DBT_USERMEM;
     m_object tmp_data;
     m_object_init(&tmp_data);
-    db_man->execCallDBp->get(db_man->execCallDBp, NULL, &key, &data, 0);
-    tmp_data.buffer = data.data;
-    tmp_data.size = data.size;
-    ret = db_execCall_unmarshall(*db_eCall, &tmp_data);
+    ret = db_man->execCallDBp->get(db_man->execCallDBp, NULL, &key, &data, 0);
+    if(ret == DB_NOTFOUND){
+        fprintf(db_man->errorFileP,
+                "Error: Could not find ExecCall with key:\n"
+                    "pid:%i timestamp:{%li.%li}\n",
+                eCall_key->pid, eCall_key->time_stamp.tv_sec,
+                eCall_key->time_stamp.tv_usec);
+    }
+    if(!ret){
+        tmp_data.buffer = data.data;
+        tmp_data.size = data.size;
+        ret = db_execCall_unmarshall(*db_eCall, &tmp_data);
+    }
     return ret;
 }
 

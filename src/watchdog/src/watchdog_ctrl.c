@@ -2,6 +2,7 @@
 #define _XOPEN_SOURCE 500
 #include <argp.h>
 #include <error.h>
+#include <fcntl.h>
 #include <linux/limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,7 +49,7 @@ static struct argp_option options[] = {
         "(current working directory, if none provided)"},
     {0,0,0,0, "suboptions of \"get\" options (-g opt1=arg,opt2,opt3=arg)"},
 	{"get", 'g', ",format=[text(t),json(j),interactive(i)]",0,
-     "Selection of output format. Inteactive mode is not yet implemented"},
+     "Selection of output format. Interactive mode is not yet implemented"},
     {"get", 'g', ",ex=[key(k),name(n),timestamp(t)]", 0,
      "Triggers process retrieval and alows for specifiers on how to retrieve"
      " them. default is key retrieval (if \"ex\" w/o args)"
@@ -215,6 +216,7 @@ int get_from_database(struct arguments* args){
     stringBuffer ret_stringbuffer;
     ret = sb_init(&ret_stringbuffer,256);
     db_manager db_man;
+    db_man_init(&db_man, DATABASE_DIR);
     createDatabase(&db_man);
     // Result vector
     vector result_recordv;
@@ -223,9 +225,6 @@ int get_from_database(struct arguments* args){
         realpath( args->arg1 ? args->arg1 : "./", args->retrievePath );
         retrieveRecords_Path(&result_recordv, &db_man,
                              args->retrievePath);
-        for (int i=0; i <= result_recordv.length; i++){
-            db_full_Record *record = result_recordv.elems[i];
-        }
     }
     switch(args->format){
         case TEXT:
@@ -261,7 +260,7 @@ int get_from_database(struct arguments* args){
                    "Enum value: %i\n", args->format);
 
     }
-    //vector_destroyd( &result_recordv, db_full_Record_destroy),
+    vector_destroyd( &result_recordv, db_void_full_Record_destroy);
     db_man_close(&db_man);
     sb_destroy(&ret_stringbuffer);
     return ret;
@@ -329,6 +328,7 @@ int main (int argc, char** argv){
         perror("cannot create socket");
         goto endprog;
     }
+    fcntl(so_fd, F_SETFD, FD_CLOEXEC);
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
     if( *ctrl_socket_addr == '\0'){
@@ -345,8 +345,27 @@ int main (int argc, char** argv){
         {
             printf("\nStarting deamon!\n");
             //TODO Start deamon
-            ret = 0;
+            pid_t pid;
+            if((pid = fork())< 0){
+                fprintf(stderr,"Fork failed\n");
+                ret = -1;
+                goto endprog;
+            }
+            if(!pid){
+                ret = execl(INSTALL_FOLDER "/watchdog_daemon",
+                      INSTALL_FOLDER "/watchdog_daemon",
+                      (char*) NULL);
+                if (ret) {
+                    fprintf(stderr,"Could not execute:"
+                            "%s\n",INSTALL_FOLDER "/watchdog_daemon\n");
+                    perror("Error");
+                }
+                return 0;
+            }
+            goto endprog;
+
         }
+
         else if (args.stop)
         {
             printf("\nAlready stopped\n");

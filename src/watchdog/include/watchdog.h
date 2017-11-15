@@ -67,6 +67,7 @@ typedef struct {
     size_t callBuff_size;
     openCall **callBuff;
     struct timeval time_stamp;
+    struct timeval ptime_stamp;
 } execCall;
 
 
@@ -147,7 +148,8 @@ int procindex_delete(procindex* this, pid_t target_pid);
  *  Status:
  *      @member is_shutting_down:
  *          true, if in the process of shutting down
- *      @member is_processing_execcall_socket:
+ *      @member is_processing_
+ *        execcall_socket:
  *          true, while execalls are being processed
  *      @member is_processing_opencall_socket:
  *          true, while opencalls are being processed

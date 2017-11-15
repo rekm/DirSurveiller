@@ -28,6 +28,9 @@ IF( EXISTS "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json" )
         ${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json
     )
 ENDIF()
+
+
+set(INSTALL_FOLDER "${PROJECT_BINARY_DIR}")
 # configure a header file to pass some of the CMake settings
 # to the source code
 configure_file (

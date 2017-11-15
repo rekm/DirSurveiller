@@ -145,6 +145,8 @@ int execCall_init(execCall* this,
     int ret = 0;
     // timeStamp
     this->deadness = 0;
+    this->ptime_stamp.tv_sec = 0;
+    this->ptime_stamp.tv_usec = 0;
     int timedot = 0;
     for(; timedot<execTimeStamp->end_pos; timedot++){
        if(execTimeStamp->string[timedot] == '.'){
@@ -304,6 +306,8 @@ int procindex_add(procindex* this, execCall* call){
     }
     if(this->size < (call->ppid+1) || !this->procs[call->ppid+1])
         call->ppid = 0;
+    else
+        call->ptime_stamp = this->procs[call->pid+1]->time_stamp;
     this->procs[call->pid+1] = call;
 
 endfun:
@@ -1177,6 +1181,7 @@ int surv_database_dispatch(surveiller* this,  execCall* eCall){
     record.env_args = "";
     record.args = eCall->args;
     record.parentEcall.pid = eCall->ppid;
+    record.parentEcall.time_stamp = eCall->ptime_stamp;
     record.time_stamp.tv_sec += this->boot_time;
     ret = db_add_execCall(&this->db_man, &record);
 
@@ -1348,9 +1353,10 @@ int main(int argc, char** argv){
                && g_ringBuffer_empty(&surv.openQueue)
                && g_ringBuffer_empty(&surv.commandQueue);
         if(dead){
-            printf("\nExiting watchdog... \n%s\n%s\n",
-                  "socket processing -> stopped",
-                  "flushing process index and starting final dispatch");
+            log_print(surv.mainLog_fp,
+                      "\nExiting watchdog... \n%s\n%s\n",
+                       "socket processing -> stopped",
+                       "flushing process index and starting final dispatch");
             surv_flush_procindex(&surv);
         }
         if(dead || !(counter % 512)){
@@ -1390,8 +1396,9 @@ int main(int argc, char** argv){
     pthread_join(threadOpenId,(void**)&t_open_ret);
     pthread_join(threadShutdownId,(void**)&t_shutdown_ret);
     pthread_join(threadControlId,(void**)&t_ctrl_ret);
-    printf("ExecHandler returned: %i\nOpenHandler returned: %i\n",
-            *t_exec_ret, *t_open_ret);
+    log_print(surv.mainLog_fp,
+              "ExecHandler returned: %i\nOpenHandler returned: %i\n",
+              *t_exec_ret, *t_open_ret);
     if(surv.restart){
         restart = 1;
     }

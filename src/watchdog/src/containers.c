@@ -83,7 +83,7 @@ int vector_init(vector* this, size_t len, size_t size_elem){
 }
 
 void vector_destroy(vector* this){
-    zfree(this->elems);
+    zfree(&this->elems);
     this->capacity = 0;
     this->length = 0;
     this->size_elem = 0;
@@ -92,8 +92,9 @@ void vector_destroy(vector* this){
 void vector_destroyd(vector* this, void (*destruct_fun)(void*)){
     for(int i=0; i<this->length ; i++){
         destruct_fun(this->elems[i]);
+        zfree(&this->elems[i]);
     }
-    zfree(this->elems);
+    zfree(&this->elems);
 }
 
 int vector_append(vector* this, void* elem){
