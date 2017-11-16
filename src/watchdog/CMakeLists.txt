@@ -84,7 +84,9 @@ target_link_libraries(db_man_test
     Threads::Threads)
 add_test(DbManagerMarshallTestEcall1 ${CMAKE_BINARY_DIR}/db_man_test 1)
 add_test(DbManagerMarshallTestOcall1 ${CMAKE_BINARY_DIR}/db_man_test 2)
-
+add_test(DbManagerJsonTestOcall1 ${CMAKE_BINARY_DIR}/db_man_test 3)
+add_test(DbManagerJsonTestEcall1 ${CMAKE_BINARY_DIR}/db_man_test 4)
+add_test(DbManagerEcallKeygenTest1 ${CMAKE_BINARY_DIR}/db_man_test 5)
 ####### Adding executables and setting library dependencies ####
 
 

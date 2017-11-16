@@ -516,7 +516,7 @@ int retrieveRecords_Path(vector* recordList,
             }
             ret = vector_append(recordList, fullRecord);
         }
-        while(filepath_cursorp->get(filepath_cursorp, &key, &data,
+        while(!filepath_cursorp->get(filepath_cursorp, &key, &data,
                                     DB_NEXT_DUP));
     }
     filepath_cursorp->close(filepath_cursorp);
@@ -538,6 +538,10 @@ int db_add_execCall(db_manager* db_man, eCallRecord* db_eCall){
     //Zero out key and data
     memset(&key, 0, sizeof(DBT));
     memset(&data, 0, sizeof(DBT));
+    printf("Add Ecall to database with key:\n"
+                "pid: %i timestamp: %li.%li\n",
+                eCallKey.pid, eCallKey.time_stamp.tv_sec,
+                eCallKey.time_stamp.tv_usec);
     //Fill key
     key.data = &eCallKey;
     key.size = sizeof(eCallKey);
