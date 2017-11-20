@@ -1184,7 +1184,11 @@ int surv_database_dispatch(surveiller* this,  execCall* eCall){
     record.parentEcall.time_stamp = eCall->ptime_stamp;
     record.time_stamp.tv_sec += this->boot_time;
     ret = db_add_execCall(&this->db_man, &record);
-
+    if(ret){
+        log_print(this->mainLog_fp,
+                  "Error adding execCall to database.\n"
+                  "ReturnValue:%i", ret);
+    }
     for (int i=0; i<eCall->call_num; i++){
         oCrecord.time_stamp = eCall->callBuff[i]->time_stamp;
         oCrecord.time_stamp.tv_sec += this->boot_time;
@@ -1192,6 +1196,11 @@ int surv_database_dispatch(surveiller* this,  execCall* eCall){
         oCrecord.filepath = eCall->callBuff[i]->filepath;
         db_execCall_genKey(&oCrecord.eCallKey,&record);
         ret = db_add_openCall(&this->db_man, &oCrecord);
+        if(ret){
+            log_print(this->mainLog_fp,
+                      "Error adding openCall to database.\n"
+                      "ReturnValue:%i",ret);
+        }
     }
     return ret;
 }

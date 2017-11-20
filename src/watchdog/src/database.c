@@ -265,7 +265,7 @@ int db_full_Record_jsonsb(db_full_Record* this, stringBuffer* sb){
         if((sb_append( sb, ", ")))
             goto endfun;
     }
-    sb_append(sb, "]\n");
+    sb_append(sb, "]}\n");
 endfun:
     return ret;
 }
