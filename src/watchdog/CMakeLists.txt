@@ -71,7 +71,7 @@ set_property(TARGET db_man PROPERTY C_STANDARD 99)
 
 target_include_directories(db_man
     PUBLIC include
-    PUBLIC ${SMAKE_BINARY_DIR}/db_static-bin
+    PUBLIC ${CMAKE_BINARY_DIR}/db_static-bin
 )
 add_dependencies(db_man berkeleyDB)
 target_link_libraries(db_man
