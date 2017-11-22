@@ -444,12 +444,14 @@ int createDatabase(db_manager* db_man){
                 "Error creating execCall_db: %s", db_strerror(ret));
     	return -1;
     }
+    //ret = db_man->execCallDBp->set_alloc(db_man->execCallDBp,
+    //                                     malloc, realloc, free);
     ret = db_man->execCallDBp->set_bt_compare(db_man->execCallDBp,
                                               db_execCall_KeyComp);
     ret = db_man->execCallDBp->open(db_man->execCallDBp, NULL, "execCalls.db",
                                     NULL, DB_BTREE,
                                     DB_AUTO_COMMIT |
-                                        DB_CREATE | DB_THREAD,
+                                        DB_CREATE,
                                      0644) == 0;
 
     //g_dbenv->close(g_dbenv,0);
@@ -510,6 +512,7 @@ int retrieveRecords_Path(vector* recordList,
     memset(&data, 0, sizeof(DBT));
     key.data = path;
     key.size = strlen(path)+1;
+    //data.flags = DB_DBT_MALLOC;
     //Get Cursor
     db_man->openCallFilePathDBp->cursor(db_man->openCallFilePathDBp,
                                         0, &filepath_cursorp, 0);
@@ -592,8 +595,8 @@ int db_get_execCall_by_key(db_manager* db_man, eCallRecord** db_eCall,
     memset(&data, 0, sizeof(DBT));
     key.data = eCall_key;
     key.size = sizeof(*eCall_key);
-    key.flags = DB_DBT_USERCOPY;
-    //data.flags = DB_DBT_USERMEM;
+    key.flags = DB_DBT_MALLOC;
+    data.flags = DB_DBT_MALLOC;
     m_object tmp_data;
     m_object_init(&tmp_data);
     //data.data = tmp_data.buffer;
