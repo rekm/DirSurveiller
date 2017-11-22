@@ -26,7 +26,7 @@ IF( EXISTS "${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json" )
     EXECUTE_PROCESS( COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json
         ${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json
-    )
+        )
 ENDIF()
 
 
@@ -48,7 +48,11 @@ include_directories("${PROJECT_BINARY_DIR}")
 # should we include Debug Output?
 option (DEBUG
         "Run programs in DEBUG MODE" OFF)
-
+IF( DEBUG )
+    set(DEBUG 1)
+ELSE()
+    set(DEBUG 0)
+ENDIF()
 #ExternalProject Module for BerkleyDB
 include(${CMAKE_ROOT}/Modules/ExternalProject.cmake)
 #SubDirectory

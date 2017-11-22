@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "database.h"
 #include "DirSurveillerConfig.h"
+#include "database.h"
 
 
 //  #####  Marshalled Object #####  //
@@ -78,11 +78,39 @@ int db_execCall_to_jsonstringb(stringBuffer* jsonBuffer,
     ret = sb_append(jsonBuffer,"}");
     return ret;
 }
-
+//Execution Call: Key
 void db_execCall_genKey(db_eCallKey* eCallKey, eCallRecord* eCall){
     eCallKey->time_stamp = eCall->time_stamp;
     eCallKey->pid = eCall->pid;
 }
+
+int db_execCall_KeyComp(DB *dbp, const DBT *key1, const DBT *key2,
+                        size_t *size){
+    int ret = 0;
+    db_eCallKey eCallKey1, eCallKey2;
+    if(!key2->size){
+        if(key1->size){
+            debug_print("%s\n","EcallKeyComp: Second key empty!");
+            return 1;
+        }
+        else{
+            debug_print("%s\n", "EcallKeyComp: Both keys empty!");
+            return 0;
+        }
+    }
+    else if(!key1->size){
+        debug_print("%s\n", "EcallKeyComp: First key empty!");
+        return -1;
+    }
+    memcpy(&eCallKey1,key1->data, sizeof(db_eCallKey));
+    memcpy(&eCallKey2,key2->data, sizeof(db_eCallKey));
+    ret = timercmp(&eCallKey2.time_stamp, &eCallKey1.time_stamp, <)
+          - timercmp(&eCallKey1.time_stamp, &eCallKey2.time_stamp, <);
+    if(!ret)
+        ret = eCallKey1.pid - eCallKey2.pid;
+    return ret;
+}
+
 
 int db_execCall_marshall(m_object* m_obj, eCallRecord* eCall){
     if(!m_obj->buffer){
@@ -416,7 +444,8 @@ int createDatabase(db_manager* db_man){
                 "Error creating execCall_db: %s", db_strerror(ret));
     	return -1;
     }
-
+    ret = db_man->execCallDBp->set_bt_compare(db_man->execCallDBp,
+                                              db_execCall_KeyComp);
     ret = db_man->execCallDBp->open(db_man->execCallDBp, NULL, "execCalls.db",
                                     NULL, DB_BTREE,
                                     DB_AUTO_COMMIT |
@@ -563,9 +592,11 @@ int db_get_execCall_by_key(db_manager* db_man, eCallRecord** db_eCall,
     memset(&data, 0, sizeof(DBT));
     key.data = eCall_key;
     key.size = sizeof(*eCall_key);
-    data.flags = DB_DBT_USERMEM;
+    key.flags = DB_DBT_USERCOPY;
+    //data.flags = DB_DBT_USERMEM;
     m_object tmp_data;
     m_object_init(&tmp_data);
+    //data.data = tmp_data.buffer;
     ret = db_man->execCallDBp->get(db_man->execCallDBp, NULL, &key, &data, 0);
     if(ret == DB_NOTFOUND){
         fprintf(db_man->errorFileP,
@@ -573,6 +604,11 @@ int db_get_execCall_by_key(db_manager* db_man, eCallRecord** db_eCall,
                     "pid:%i timestamp:{%li.%li}\n",
                 eCall_key->pid, eCall_key->time_stamp.tv_sec,
                 eCall_key->time_stamp.tv_usec);
+    }
+    else if(ret){
+        fprintf(db_man->errorFileP,
+                "Error while searching for ExecCall\n%s\n",
+                db_strerror(ret));
     }
     if(!ret){
         tmp_data.buffer = data.data;

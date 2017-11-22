@@ -4,6 +4,7 @@
 #include <error.h>
 #include <fcntl.h>
 #include <linux/limits.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +14,13 @@
 
 #include <DirSurveillerConfig.h>
 #include "database.h"
+
+db_manager glob_db_man;
+
+
+void handle_signal(int signal){
+    db_man_close(&glob_db_man);
+}
 
 // Argparse code mostly copied from the argparse manual
 
@@ -213,11 +221,21 @@ static struct argp argp = { options, parse_opt, args_doc, doc };
 
 int get_from_database(struct arguments* args){
     int ret = 0;
+
     stringBuffer ret_stringbuffer;
     ret = sb_init(&ret_stringbuffer,256);
-    db_manager db_man;
-    db_man_init(&db_man, DATABASE_DIR);
-    createDatabase(&db_man);
+    db_man_init(&glob_db_man, DATABASE_DIR);
+    static struct sigaction sa;
+    sa.sa_handler = &handle_signal;
+    sa.sa_flags = SA_RESETHAND;
+    sigfillset(&sa.sa_mask);
+    for(int sig=1; sig < 64; sig++){
+        if((sig != SIGKILL) && (sig != SIGSTOP) && (sig != 32) && (sig != 33)){
+            sigaction(sig, &sa, NULL);
+        }
+    }
+    createDatabase(&glob_db_man);
+    db_manager db_man = glob_db_man;
     // Result vector
     vector result_recordv;
     vector_init(&result_recordv, 32, sizeof(db_full_Record*));

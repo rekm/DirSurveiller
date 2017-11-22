@@ -2,6 +2,7 @@
 #define DirSurveiller_VERSION_MINOR @DirSurveiller_VERSION_MINOR@
 #define DirSurveiller_VERSION_PATCH @DirSurveiller_VERSION_PATCH@
 #define DirSurveiller_FULL_VERSION "@DirSurveiller_VERSION_MAJOR@.@DirSurveiller_VERSION_MINOR@.@DirSurveiller_VERSION_PATCH@"
+#cmakedefine01 @DEBUG@
 #define LOG_DIR "@LOG_DIR@"
 #define DATABASE_DIR "@DATABASE_DIR@"
 #define INSTALL_FOLDER "@INSTALL_FOLDER@"
