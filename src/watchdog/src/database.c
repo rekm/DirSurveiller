@@ -451,7 +451,7 @@ int createDatabase(db_manager* db_man){
     ret = db_man->execCallDBp->open(db_man->execCallDBp, NULL, "execCalls.db",
                                     NULL, DB_BTREE,
                                     DB_AUTO_COMMIT |
-                                        DB_CREATE,
+                                        DB_CREATE | DB_THREAD,
                                      0644) == 0;
 
     //g_dbenv->close(g_dbenv,0);
