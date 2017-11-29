@@ -1,3 +1,12 @@
+/** @file watchdog.c
+ *  @brief watchdog daemon: it processes incomming datastreams
+ *         and archives ExecCalls and OpenCalls in a database for later
+ *         retrieval.
+ *  @author Rene Kmiecinski
+ *  @bug Not known
+ */
+
+
 #define _BSD_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #include "definitions.h"
@@ -17,7 +26,12 @@
 #include "DirSurveillerConfig.h"
 
 
-
+/**
+ * @brief reading boot time from /proc/stat
+ * @return bootime(long) in seconds or
+ * @retval -1  parse of /proc/stat can't find btime
+ * @retval -2  opening of /proc/stat failed
+ */
 long get_boot_time(){
     long ret = 1;
     FILE* stat_fp;
@@ -56,10 +70,10 @@ endfun:
  * Setting up an openCall with a stringBuffers
  * containing the relevant information via
  * pass through
- * @returns:(-1/_) if inode determination fails
- *           (0/NOMINAL) if success
- *           (1/_) if memory allocation failed
- *           (2/_) if timevalue cannot be parsed
+ * @retval (-1/_) inode determination fails
+ * @retval (0/NOMINAL) SUCCESS
+ * @retval (1/_) memory allocation failed
+ * @retval (2/_) timevalue cannot be parsed
  */
 int openCall_init(openCall* this,
                   stringBuffer* openTimeStamp,
@@ -521,8 +535,7 @@ void surv_destroy(surveiller* this){
     fclose(this->mainLog_fp);
     db_man_close(&this->db_man);
 }
-
-/**
+ /*
  * Handling of incomming opencalls and filtering of them
  */
 void* surv_handleOpenCallSocket(void* surv_struct){
@@ -714,7 +727,7 @@ endfun:
 }
 
 
-/**
+/*
  * Handler for incomming execcalls
  */
 void* surv_handleExecCallSocket(void* surv_struct){
@@ -1102,7 +1115,7 @@ void* surv_handleAccess(void* void_surv_struct){
     }
 
     if (listen(rc_fd, 10) == -1) {
-       perror( "Can't set listen mode in open socket");
+       log_print(surv->ctrlLog_fp,"Can't set listen mode in open socket");
        *ret = -1;
        goto endfun;
     }

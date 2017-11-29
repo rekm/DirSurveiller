@@ -195,6 +195,26 @@ int db_openCall_to_jsonstringb(stringBuffer* jsonBuffer,
     return ret;
 }
 
+int db_openCall_to_stringb(stringBuffer* sBuffer,
+                           oCallRecord* oCall){
+    int ret = 0;
+    int charsformated = 0;
+    char buffer[300];
+    ret = sb_append(sBuffer, "filepath:\n ");
+    ret = sb_append(sBuffer, oCall->filepath);
+    ret = sb_append(sBuffer, "\n");
+    charsformated = snprintf(buffer, 300,
+                            "time_stamp: %li.%li\n"
+                            "flag: %i\ninode: i\n",
+                            oCall->time_stamp.tv_sec,
+                            oCall->time_stamp.tv_usec,
+                            oCall->flag
+                            //oCall->inode
+                    );
+    ret = sb_append(sBuffer, buffer);
+    return ret;
+}
+
 void gen_filepath_suffix(char* suffix, char* filepath){
     size_t path_length;
     size_t start_pos;
@@ -299,7 +319,18 @@ endfun:
 }
 
 
-
+int db_full_Record_stringb(db_full_Record* this, stringBuffer* sb){
+    int ret = 0;
+    unsigned start_pos = sb->end_pos;
+    if((ret = sb_append( sb, "openCall:\n"))){
+        goto endfun;
+    }
+    if((ret = db_openCall_to_stringb(sb, &this->openCall))){
+        goto endfun;
+    }
+endfun:
+    return ret;
+}
 // ################ DB Manager ################ //
 
 

@@ -44,15 +44,23 @@ include_directories("${PROJECT_BINARY_DIR}")
 
 # putting all executable into bin
 
+# Doxygen
+
+find_package(Doxygen)
+if(DOXYGEN_FOUND)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/doc/Doxyfile.in
+               ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile @ONLY)
+add_custom_target(doc
+${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
+WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+COMMENT "Generating API documentation with Doxygen" VERBATIM
+)
+endif(DOXYGEN_FOUND)
 
 # should we include Debug Output?
 option (DEBUG
         "Run programs in DEBUG MODE" OFF)
-IF( DEBUG )
-    set(DEBUG 1)
-ELSE()
-    set(DEBUG 0)
-ENDIF()
+
 #ExternalProject Module for BerkleyDB
 include(${CMAKE_ROOT}/Modules/ExternalProject.cmake)
 #SubDirectory
