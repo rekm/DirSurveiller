@@ -1,0 +1,40 @@
+image: continuumio/miniconda3:latest
+
+cache:
+  paths:
+    - $CI_PROJECT_DIR/.conda_cache
+    - $CI_PROJECT_DIR/.apt_cache
+before_script:
+    #  - conda update -y -n base conda
+ # - "export _PYTHON_SYSCONFIGDATA_NAME='_sysconfigdata_m_linux_x86_64-linux-gnu'"
+ # - conda update -y pip
+ # - "grep allow_softlinks $CONDA_PREFIX/.condarc || echo allow_softlinks: False >> $CONDA_PREFIX/.condarc"
+ # - conda update -y gxx_linux-64 || conda install gxx_linux-64
+ # - unset _PYTHON_SYSCONFIGDATA_NAME
+ # - conda update -y gcc_linux-64 || conda install gcc_linux-64
+ # - export _PYTHON_SYSCONFIGDATA_NAME='_sysconfigdata_m_linux_x86_64-linux-gnu'
+ # - source activate $CXX
+ # - gcc --version
+  - export APT_DIR=$CI_PROJECT_DIR/.apt_cache && export APT_STATE_LISTS=$APT_DIR/lists && export APT_CACHE_ARCHIVES=$APT_DIR/archives
+  - printf "dir::state::lists    ${APT_STATE_LISTS};\ndir::cache::archives    ${APT_CACHE_ARCHIVES};\n" > /etc/apt/apt.conf
+  - mkdir -p "${APT_STATE_LISTS}/partial" && mkdir -p "${APT_CACHE_ARCHIVES}/partial"
+  - apt-get update
+  - apt-get install -y libaudit-dev libauparse-dev
+  - bash gitlab-ci.sh
+#  - source activate $CI_PROJECT_DIR/.conda_cache/qcumber
+  - bash build.sh
+
+stages:
+  - build
+  - test
+
+test:
+  only:
+    - development
+    - master
+  stage: build
+  script:
+    - mkdir build
+    - cd build
+    - cmake ../
+    - make
