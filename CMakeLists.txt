@@ -31,6 +31,15 @@ ENDIF()
 
 
 set(INSTALL_FOLDER "${PROJECT_BINARY_DIR}")
+
+set(PluginConfigDir "/etc/audisp/audisp-dirsurv.conf" CACHE PATH
+    "Location of audit plugin config file")
+
+option (PluginOmmitRootChecks
+        "Skips root checks for files in configs")
+option (PluginOmmitPermissonChecks
+        "Skips permisson checks for files in config")
+
 # configure a header file to pass some of the CMake settings
 # to the source code
 configure_file (
@@ -66,3 +75,4 @@ include(${CMAKE_ROOT}/Modules/ExternalProject.cmake)
 #SubDirectory
 add_subdirectory(${PROJECT_SOURCE_DIR}/src/tracer)
 add_subdirectory(${PROJECT_SOURCE_DIR}/src/watchdog)
+add_subdirectory(${PROJECT_SOURCE_DIR}/src/audisp-dirsurv)
