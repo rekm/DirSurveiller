@@ -1,0 +1,3 @@
+#define CONFIG_FILE "@PluginConfigDir@"
+#cmakedefine01 @PluginOmmitRootChecks@
+#cmakedefine01 @PluginOmmitPermissonChecks@
