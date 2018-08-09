@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 
+set -eu -o pipefail
+
 # Inspired by OP of
 # https://stackoverflow.com/questions/48540257/
 # caching-virtual-environment-for-gitlab-ci
+BERK_BLD_PATH="build/db_static-bin"
+CACHE_BER_BLD="$CI_PROJECT_DIR/.misc_cache/libdb.a"
+mkdir -p $BERK_BLD_PATH
+if [ -f "$CACHE_BER_BLD" ]; then
+    cp $CACHE_BER_BLD "$BERK_BLD_PATH"/.
+fi
 
 #ENV_NAME="qcumber"
 #if [[ -z "${CI_PROJECT_DIR}" ]]; then
