@@ -4,15 +4,14 @@ cache:
   paths:
     - $CI_PROJECT_DIR/.conda_cache
     - $CI_PROJECT_DIR/.apt_cache
+    - $CI_PROJECT_DIR/.misc_cache
 before_script:
-    #  - conda update -y -n base conda
- # - "export _PYTHON_SYSCONFIGDATA_NAME='_sysconfigdata_m_linux_x86_64-linux-gnu'"
- # - conda update -y pip
+  - git submodule update --init --recursive
   - export APT_DIR=$CI_PROJECT_DIR/.apt_cache && export APT_STATE_LISTS=$APT_DIR/lists && export APT_CACHE_ARCHIVES=$APT_DIR/archives
   - printf "dir::state::lists    ${APT_STATE_LISTS};\ndir::cache::archives    ${APT_CACHE_ARCHIVES};\n" > /etc/apt/apt.conf
   - mkdir -p "${APT_STATE_LISTS}/partial" && mkdir -p "${APT_CACHE_ARCHIVES}/partial"
   - apt-get update
-  - apt-get install -y libaudit-dev libauparse-dev
+  - apt-get install -y libaudit-dev libauparse-dev build-essential cmake
   - bash gitlab-ci.sh
 #  - source activate $CI_PROJECT_DIR/.conda_cache/qcumber
 
@@ -30,3 +29,9 @@ build:
     - cd build
     - cmake ../
     - make
+    - mkdir -p $CI_PROJECT_DIR/.misc_cache
+    - cp db_static-bin/libdb.a $CI_PROJECT_DIR/.misc_cache/.
+  artifacts:
+      paths:
+          $CI_PROJECT_DIR/.misc_cache/libdb.a
+
