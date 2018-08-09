@@ -286,20 +286,20 @@ static int do_action (const char *desc, const char *message,
 	"remote logging disconnected due to %s, will attempt reconnection",
 			desc);
 		return -1;
-	/*
-    case FA_SINGLE:
+
+    case FA_SINGLE:/**
 		syslog (log_level,
 	"remote logging is switching system to single user mode due to %s",
 			desc);
-		change_runlevel(SINGLE);
+		change_runlevel(SINGLE);**/
 		return -1;
-        */
-     /*
-	case FA_HALT:
+
+
+	case FA_HALT:/*
 		syslog (log_level,
 			"remote logging halting system due to %s", desc);
-		change_runlevel(HALT);
-		return -1;*/
+		change_runlevel(HALT);*/
+		return -1;
 	case FA_STOP:
 		syslog (log_level, "remote logging stopping due to %s, %s",
 			desc, message);
