@@ -32,6 +32,6 @@ build:
     - mkdir -p $CI_PROJECT_DIR/.misc_cache
     - cp db_static-bin/libdb.a $CI_PROJECT_DIR/.misc_cache/.
   artifacts:
-      paths:
-          $CI_PROJECT_DIR/.misc_cache/libdb.a
+    paths:
+      - $CI_PROJECT_DIR/.misc_cache/libdb.a
 
