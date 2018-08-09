@@ -27,7 +27,7 @@ build:
   script:
     - mkdir -p build
     - cd build
-    - cmake ../
+    - cmake -L ../
     - make
     - mkdir -p $CI_PROJECT_DIR/.misc_cache
     - cp db_static-bin/libdb.a $CI_PROJECT_DIR/.misc_cache/.
