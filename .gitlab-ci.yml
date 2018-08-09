@@ -11,7 +11,7 @@ before_script:
   - printf "dir::state::lists    ${APT_STATE_LISTS};\ndir::cache::archives    ${APT_CACHE_ARCHIVES};\n" > /etc/apt/apt.conf
   - mkdir -p "${APT_STATE_LISTS}/partial" && mkdir -p "${APT_CACHE_ARCHIVES}/partial"
   - apt-get update
-  - apt-get install -y libaudit-dev libauparse-dev build-essential cmake
+  - apt-get install -y auditd libaudit-dev libauparse-dev build-essential cmake
   - bash gitlab-ci.sh
 #  - source activate $CI_PROJECT_DIR/.conda_cache/qcumber
 
