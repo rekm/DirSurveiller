@@ -68,7 +68,7 @@ endif(DOXYGEN_FOUND)
 
 # should we include Debug Output?
 option (DEBUG
-        "Run programs in DEBUG MODE" OFF)
+        "Run programs in DEBUG MODE")
 
 #ExternalProject Module for BerkleyDB
 include(${CMAKE_ROOT}/Modules/ExternalProject.cmake)
