@@ -21,8 +21,11 @@
  *   Steve Grubb <sgrubb@redhat.com>
  *
  */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 
-//#include "config.h"
+#include "PluginConfig.h"
 #include <string.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -59,6 +62,19 @@ struct nv_list
 static char *get_line(FILE *f, char *buf);
 static int nv_split(char *buf, struct nv_pair *nv);
 static const struct kw_pair *kw_lookup(const char *val);
+
+static int domain_socket_parser(struct nv_pair *nv, int line,
+                                remote_conf_t *config);
+static int use_access_validation_parser(struct nv_pair *nv, int line,
+                                remote_conf_t *config);
+static int use_domain_socket_parser(struct nv_pair *nv, int line,
+                                remote_conf_t *config);
+static int target_uid_parser(struct nv_pair *nv, int line,
+                                remote_conf_t *config);
+static int target_gid_parser(struct nv_pair *nv, int line,
+                                remote_conf_t *config);
+
+
 static int server_parser(struct nv_pair *nv, int line,
 		remote_conf_t *config);
 static int port_parser(struct nv_pair *nv, int line,
@@ -109,6 +125,12 @@ static int sanity_check(remote_conf_t *config, const char *file);
 
 static const struct kw_pair keywords[] =
 {
+  {"domain_socket",         domain_socket_parser,         0 },
+  {"use_domain_socket",     use_domain_socket_parser,     0 },
+  {"use_access_validation", use_access_validation_parser, 0 },
+  {"target_uid",            target_uid_parser,	                  0 },
+  {"target_gid",            target_gid_parser,                   0 },
+
   {"remote_server",    server_parser,		0 },
   {"port",             port_parser,		0 },
   {"local_port",       local_port_parser,	0 },
@@ -268,13 +290,13 @@ int load_config(remote_conf_t *config, const char *file)
 		close(fd);
 		return 1;
 	}
-	if (st.st_uid != 0) {
+	if ( !PluginOmmitRootChecks && st.st_uid != 0) {
 		syslog(LOG_ERR, "Error - %s isn't owned by root",
 			file);
 		close(fd);
 		return 1;
 	}
-	if ((st.st_mode & S_IWOTH) == S_IWOTH) {
+	if ( !PluginOmmitPermissionChecks && (st.st_mode & S_IWOTH) == S_IWOTH) {
 		syslog(LOG_ERR, "Error - %s is world writable",
 			file);
 		close(fd);
@@ -480,6 +502,7 @@ static int server_parser(struct nv_pair *nv, int line,
 	return 0;
 }
 
+//>parsers:util-func{{{
 static int parse_uint (const struct nv_pair *nv, int line, unsigned int *valp,
 		unsigned int min, unsigned int max)
 {
@@ -521,6 +544,43 @@ static int parse_uint (const struct nv_pair *nv, int line, unsigned int *valp,
 	*valp = (unsigned int)i;
 	return 0;
 }
+//<parsers:util-func}}}
+
+//>parsers:domain-socket-options{{{
+
+static int domain_socket_parser(struct nv_pair *nv, int line,
+                                remote_conf_t *config)
+{
+	if (nv->value) {
+		if (*nv->value != '/') {
+			syslog(LOG_ERR, "Absolute path needed for %s - line %d",
+			       nv->value, line);
+			return 1;
+		}
+		config->domain_socket = strdup(nv->value);
+	} else
+		config->domain_socket = NULL;
+	return 0;
+}
+
+static int use_access_validation_parser(struct nv_pair *nv, int line, remote_conf_t *config)
+{
+	return parse_uint (nv, line, &(config->target_uid), 0, 1);
+}
+static int use_domain_socket_parser(struct nv_pair *nv, int line, remote_conf_t *config)
+{
+	return parse_uint (nv, line, &(config->target_uid), 0, 1);
+}
+static int target_uid_parser(struct nv_pair *nv, int line, remote_conf_t *config)
+{
+	return parse_uint (nv, line, &(config->target_uid), 0, 65535);
+}
+
+static int target_gid_parser(struct nv_pair *nv, int line, remote_conf_t *config)
+{
+	return parse_uint (nv, line, &(config->target_gid), 0, 65535);
+}
+//<parsers:domain-socket-options}}}
 
 static int port_parser(struct nv_pair *nv, int line, remote_conf_t *config)
 {

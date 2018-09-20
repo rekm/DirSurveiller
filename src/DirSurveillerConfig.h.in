@@ -5,4 +5,4 @@
 #define LOG_DIR "@LOG_DIR@"
 #define DATABASE_DIR "@DATABASE_DIR@"
 #define INSTALL_FOLDER "@INSTALL_FOLDER@"
-#cmakedefine01 @DEBUG@
+#cmakedefine01 DEBUG

@@ -37,7 +37,8 @@ set(PluginConfigDir "/etc/audisp/audisp-dirsurv.conf" CACHE PATH
 
 option (PluginOmmitRootChecks
         "Skips root checks for files in configs")
-option (PluginOmmitPermissonChecks
+
+option (PluginOmmitPermissionChecks
         "Skips permisson checks for files in config")
 
 # configure a header file to pass some of the CMake settings
