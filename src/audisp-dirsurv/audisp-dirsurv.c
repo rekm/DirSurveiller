@@ -449,7 +449,9 @@ static void process_one(struct queue *queue, auparse_state_t *au)
         queue_error();
         return;
     }
-    //printf("%i: %s", len,event);
+
+    //printf(stderr, "%i: %s", len,event);
+    event[len] = '\n';
     auparse_feed(au, event, len+1);
     warned = 0;
     if (q_drop_head(queue) != 0)
@@ -468,7 +470,7 @@ void auparse_callback(auparse_state_t *au, auparse_cb_event_t cb_event_type,
 
     if (cb_event_type == AUPARSE_CB_EVENT_READY) {
         if (auparse_first_record(au) <= 0) return;
-        syslog(LOG_NOTICE,"event: %d\n", *event_cnt);
+        //syslog(LOG_NOTICE,"event: %d\n", *event_cnt);
         printf("records:%d\n", auparse_get_num_records(au));
         do {
             printf("fields:%d\n", auparse_get_num_fields(au));
@@ -673,10 +675,11 @@ int main(int argc, char *argv[])
             } while (remote_fgets_more(sizeof(event)));
         }
         // See if output fd is also set
-        if (sock > 0 && FD_ISSET(sock, &wfd)) {
+        ///if (sock > 0 && FD_ISSET(sock, &wfd)) {
+        if (1) {
             // If so, try to drain backlog
             while (q_queue_length(queue) && !suspend &&
-                   !stop &&
+                   //!stop &&
                    transport_ok)
                 process_one(queue, au);
                 //send_one(queue);
@@ -1234,6 +1237,13 @@ static int init_unix_socket(void)
     struct iovec iov;
     struct ucred *ucredp, ucred;
 
+    if (sock >= 0)
+    {
+        syslog(LOG_NOTICE, "socket already setup");
+        transport_ok = 1;
+        return ET_SUCCESS;
+    }
+
     /** control message header*/
     union {
         char buf[CMSG_SPACE(sizeof(struct ucred))];
@@ -1245,6 +1255,7 @@ static int init_unix_socket(void)
 // TODO: setup socket info {{{
     struct sockaddr_un soc_addr;
     struct timeval timeout;
+    struct ucred creds;
     int fd_open, fd_exec;
     fd_set fds;
     if (( fd_open = socket(AF_UNIX, SOCK_STREAM,0)) == -1) {
@@ -1263,27 +1274,24 @@ static int init_unix_socket(void)
         goto out;
     }
 
-    unlink(soc_addr.sun_path);
 
 // }}}
 
 // TODO: secure credentials {{{
-
+    creds.gid = getgid();
+    creds.pid = getpid();
+    creds.uid = getuid();
 // }}}
 
 // TODO: setup socket info {{{
 
 //}}}
-    if (sock >= 0)
-    {
-        syslog(LOG_NOTICE, "socket already setup");
-        transport_ok = 1;
-        return ET_SUCCESS;
-    }
 
     transport_ok = 1;
     syslog(LOG_NOTICE, "Connected to %s", config.domain_socket);
     rc = ET_SUCCESS;
+
+    unlink(soc_addr.sun_path);
 out:
     return rc;
 }
