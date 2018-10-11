@@ -471,23 +471,43 @@ void auparse_callback(auparse_state_t *au, auparse_cb_event_t cb_event_type,
     if (cb_event_type == AUPARSE_CB_EVENT_READY) {
         if (auparse_first_record(au) <= 0) return;
         //syslog(LOG_NOTICE,"event: %d\n", *event_cnt);
-        printf("records:%d\n", auparse_get_num_records(au));
+        int event_under_surveillance = 0;
+        char id_name[] = "key";
+        char key_value[] = "watchdog";
         do {
-            printf("fields:%d\n", auparse_get_num_fields(au));
-            printf("type=%d ", auparse_get_type(au));
-            const au_event_t *e = auparse_get_timestamp(au);
-            if (e == NULL) return;
-            printf("event time: %u.%u:%lu\n",
-                   (unsigned)e->sec, e->milli, e->serial);
-            auparse_first_field(au);
+
             do {
-                printf("%s=%s (%s)\n", auparse_get_field_name(au),
-                       auparse_get_field_str(au),
-                       auparse_interpret_field(au));
-            } while (auparse_next_field(au) > 0);
-            printf("\n");
-        } while(auparse_next_record(au) > 0);
-        (*event_cnt)++;
+                if ((strncmp(auparse_get_field_name(au),
+                            id_name, strlen(id_name)) == 0)
+                        && (strncmp(auparse_interpret_field(au),
+                                  key_value, strlen(key_value))
+                            == 0)){
+                    event_under_surveillance = 1;
+                }
+            } while(! event_under_surveillance &&
+                    auparse_next_field(au) > 0);
+        } while(! event_under_surveillance &&
+                auparse_next_record(au) > 0);
+        auparse_goto_record_num(au, 0);
+        if(event_under_surveillance){
+            printf("records:%d\n", auparse_get_num_records(au));
+            do {
+                printf("fields:%d\n", auparse_get_num_fields(au));
+                printf("type=%d ", auparse_get_type(au));
+                const au_event_t *e = auparse_get_timestamp(au);
+                if (e == NULL) return;
+                printf("event time: %u.%u:%lu\n",
+                       (unsigned)e->sec, e->milli, e->serial);
+                auparse_first_field(au);
+                do {
+                    printf("%s=%s (%s)\n", auparse_get_field_name(au),
+                           auparse_get_field_str(au),
+                           auparse_interpret_field(au));
+                } while (auparse_next_field(au) > 0);
+                printf("\n");
+            } while(auparse_next_record(au) > 0);
+            (*event_cnt)++;
+        }
     }
     return;
 }
