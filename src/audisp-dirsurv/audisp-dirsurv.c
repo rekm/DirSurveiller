@@ -61,6 +61,7 @@
 #include "dirsurv-config.h"
 #include "queue.h"
 #include "remote-fgets.h"
+#include "audisp_transport_structs.h"
 
 //#define CONFIG_FILE "/etc/audisp/audisp-remote.conf"
 #define BUF_SIZE 32
