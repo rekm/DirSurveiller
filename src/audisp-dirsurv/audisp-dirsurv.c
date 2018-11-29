@@ -71,9 +71,9 @@
 #define QUEUE_ENTRY_SIZE (3*4096)
 
 /* Error types */
-#define ET_SUCCESS   0
-#define ET_PERMANENT    -1
-#define ET_TEMPORARY    -2
+#define ET_SUCCESS 0
+#define ET_PERMANENT -1
+#define ET_TEMPORARY -2
 
 /* Global Data */
 static volatile int stop = 0;
